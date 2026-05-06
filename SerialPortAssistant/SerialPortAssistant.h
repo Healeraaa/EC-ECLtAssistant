@@ -53,6 +53,8 @@ private:
 
     QCheckBox* CheckBox_SaveCSV, * CheckBox_EnablePlot;
     QLineEdit* Edit_XRange;
+    QLineEdit* Edit_XMin, * Edit_XMax;
+    QLineEdit* Edit_YMin, * Edit_YMax;
     QScrollBar* ScrollBar_X;
 
     QDoubleSpinBox* Spin_Floats[6];
@@ -61,7 +63,7 @@ private:
     // 图表与逻辑
     QChartView* chartView;
     QValueAxis* axisX, * axisY;
-    QList<QLineSeries*> seriesList;
+     QList<QLineSeries*> seriesList;
     QByteArray buffer;
     double plotCount = 0;
     QSerialPort* serialPort;
