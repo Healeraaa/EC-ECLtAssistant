@@ -272,12 +272,19 @@ void SerialPortAssistant::processBufferOptimized() {
     
     int pos = 0;
     static int frameCount = 0;
+    static bool firstFrameLogged = false;
     int currentFrames = 0;
     while (pos + 19 <= buffer.size()) {
         int headerPos = buffer.indexOf(QByteArray("\x55\xAA"), pos);
         if (headerPos == -1) break;
         
         pos = headerPos;
+        
+        // 🔥 诊断：第一个帧头位置
+        if (!firstFrameLogged) {
+            qDebug() << ">>> FIRST FRAME HEADER at pos:" << pos << "bufferSize:" << buffer.size();
+            firstFrameLogged = true;
+        }
         
         // 🔥 直接从数据包中读取frameLen（小端法）
         if (pos + 4 > buffer.size()) break;  // 确保能读到frameLen字段
@@ -307,6 +314,32 @@ void SerialPortAssistant::processBufferOptimized() {
             continue;
         }
         
+        // 🔥 CRC校验：计算从帧头到数据负载的所有数据（frameLen - 4 字节）
+        QByteArray frameData = buffer.mid(pos, frameLen - 4);
+        uint16_t calculatedCRC = calculateCRC16(frameData);
+        // 读取帧中存储的CRC（小端序：低字节在前）
+        uint16_t frameCRC = static_cast<uint8_t>(buffer[pos + frameLen - 4]) | 
+                            (static_cast<uint8_t>(buffer[pos + frameLen - 3]) << 8);
+        if (calculatedCRC != frameCRC) {
+            // 诊断：输出详细帧结构信息
+            QString headerHex = QString::number((uint8_t)buffer[pos], 16).rightJustified(2, '0') + " " +
+                               QString::number((uint8_t)buffer[pos+1], 16).rightJustified(2, '0') + " " +
+                               QString::number((uint8_t)buffer[pos+2], 16).rightJustified(2, '0') + " " +
+                               QString::number((uint8_t)buffer[pos+3], 16).rightJustified(2, '0');
+            QString crcBytesHex = QString::number((uint8_t)buffer[pos + frameLen - 4], 16).rightJustified(2, '0') + " " +
+                                 QString::number((uint8_t)buffer[pos + frameLen - 3], 16).rightJustified(2, '0');
+            
+            qDebug() << "\n🔴 CRC check FAILED at pos" << pos 
+                     << "\n  frameLen=" << frameLen
+                     << "\n  calculated CRC=" << QString::number(calculatedCRC, 16)
+                     << "stored CRC=" << QString::number(frameCRC, 16)
+                     << "\n  Header bytes:" << headerHex
+                     << "\n  CRC bytes:" << crcBytesHex
+                     << "\n  Frame data size for CRC calc:" << frameData.size();
+            pos += 2;
+            continue;
+        }
+        
         uint8_t id = static_cast<uint8_t>(buffer[pos + 4]);
         uint16_t count = static_cast<uint8_t>(buffer[pos + 13]) | 
                          (static_cast<uint8_t>(buffer[pos + 14]) << 8);
@@ -317,7 +350,7 @@ void SerialPortAssistant::processBufferOptimized() {
         }
         
         int dataStartPos = pos + 15;
-        int dataEndPos = pos + frameLen - 2;  // 帧尾前
+        int dataEndPos = pos + frameLen - 4;  // CRC之前（不是帧尾之前）
         int floatsCanRead = (dataEndPos - dataStartPos) / 4;
         
         if (floatsCanRead < 1) {
@@ -344,7 +377,7 @@ void SerialPortAssistant::processBufferOptimized() {
         // 🔥 优化：先收集新点，避免无限append导致卡顿
         QVector<QPointF> newPoints;
         for (int i = 0; i < floatsToRead; ++i) {
-            if (dataPos + 4 > pos + frameLen - 2) break;
+            if (dataPos + 4 > pos + frameLen - 4) break;  // CRC之前
              
             uint32_t rawVal = 0;
             rawVal |= (uint8_t)buffer[dataPos + 0];
@@ -413,6 +446,13 @@ void SerialPortAssistant::processBufferOptimized() {
     
     if (pos > 0) {
         buffer.remove(0, pos);
+    } else if (buffer.size() > 0) {
+        // 🔥 如果缓冲区前 2 字节不是帧头，说明前面有垃圾数据，清除它
+        int firstValidHeader = buffer.indexOf(QByteArray("\x55\xAA"));
+        if (firstValidHeader > 0) {
+            qDebug() << "Removing garbage data:" << firstValidHeader << "bytes before first valid header";
+            buffer.remove(0, firstValidHeader);
+        }
     }
 }
 
