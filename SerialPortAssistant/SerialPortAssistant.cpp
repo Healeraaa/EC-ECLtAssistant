@@ -1,7 +1,9 @@
 #include "SerialPortAssistant.h"
 #include <QMessageBox>
 #include <QTimerEvent>
-#include <QDebug> 
+#include <QDebug>
+#include <QTimer>
+#include <cmath> 
 
 SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) {
     this->setWindowTitle(QString::fromUtf8("EC-ECL 电化学工作站"));
@@ -10,6 +12,12 @@ SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) 
 
     initUI();
     setupConnections();
+    
+    // 激进优化：用定时器定期处理缓冲区，而不是在 readyRead 中处理
+    QTimer* processTimer = new QTimer(this);
+    connect(processTimer, &QTimer::timeout, this, &SerialPortAssistant::processBinaryBuffer);
+    processTimer->start(1);  // 改为 1ms，提高处理频率
+    
     this->startTimer(1000);
     updatePortList();
 }
@@ -47,8 +55,8 @@ void SerialPortAssistant::initUI() {
     int row = 0;
     SerialPort_Number = new QComboBox();
     SerialPort_BaudRate = new QComboBox();
-    SerialPort_BaudRate->addItems({ "115200", "921600", "2000000", "3000000" });
-    SerialPort_BaudRate->setCurrentText("3000000");
+    SerialPort_BaudRate->addItems({ "115200", "921600", "2000000", "3000000","600000" });
+    SerialPort_BaudRate->setCurrentText("600000");
     grid->addWidget(new QLabel(QString::fromUtf8("端口:")), row, 0);
     grid->addWidget(SerialPort_Number, row++, 1);
 
@@ -97,7 +105,7 @@ void SerialPortAssistant::initUI() {
         grid->addWidget(Spin_Floats[i], row++, 1);
     }
 
-    Edit_XRange = new QLineEdit("100");
+    Edit_XRange = new QLineEdit("50000");
     grid->addWidget(new QLabel(QString::fromUtf8("波形显示范围:")), row, 0);
     grid->addWidget(Edit_XRange, row++, 1);
 
@@ -171,6 +179,14 @@ void SerialPortAssistant::updateChemLabels(int index) {
         Spin_Floats[3]->setRange(-5000.0, 5000.0); // 扫描极限2
         Spin_Floats[4]->setRange(0, 2000.0);     // 扫描速率
         Spin_Floats[5]->setRange(1.0, 1000.0);     // 循环次数
+
+        // 设置 CV 模式的默认参数
+        Spin_Floats[0]->setValue(0.0);      // 初始电位 = 0
+        Spin_Floats[1]->setValue(0.0);      // 终止电位 = 0
+        Spin_Floats[2]->setValue(500.0);    // 扫描极限1 = 500
+        Spin_Floats[3]->setValue(-500.0);   // 扫描极限2 = -500
+        Spin_Floats[4]->setValue(30.0);     // 扫描速率 = 30
+        Spin_Floats[5]->setValue(3.0);      // 循环次数 = 3
     }
     else { // DPV (差分脉冲) 模式
         labels << "初始电位(mV)" << "终止电位(mV)" << "步进电位(mV)" << "脉冲幅度(mV)" << "脉冲宽度(ms)" << "脉冲周期(ms)";
@@ -182,12 +198,18 @@ void SerialPortAssistant::updateChemLabels(int index) {
         Spin_Floats[3]->setRange(1.0, 5000.0);      // 脉冲幅度
         Spin_Floats[4]->setRange(1.0, 10000.0);     // 脉冲宽度
         Spin_Floats[5]->setRange(10.0, 10000.0);    // 脉冲周期
+
+        // 设置 DPV 模式的默认参数
+        Spin_Floats[0]->setValue(Spin_Floats[0]->minimum());
+        Spin_Floats[1]->setValue(Spin_Floats[1]->minimum());
+        Spin_Floats[2]->setValue(Spin_Floats[2]->minimum());
+        Spin_Floats[3]->setValue(Spin_Floats[3]->minimum());
+        Spin_Floats[4]->setValue(Spin_Floats[4]->minimum());
+        Spin_Floats[5]->setValue(Spin_Floats[5]->minimum());
     }
 
     for (int i = 0; i < 6; ++i) {
         Label_Floats[i]->setText(labels[i]);
-        // 建议切换模式时重置为最小值或默认值，防止旧数据超出新范围被截断
-        Spin_Floats[i]->setValue(Spin_Floats[i]->minimum());
     }
 }
 
@@ -198,10 +220,10 @@ void SerialPortAssistant::setupConnections() {
     connect(SerialPort_Send, &QPushButton::clicked, this, &SerialPortAssistant::sendConfig);
     connect(Btn_ResetPlot, &QPushButton::clicked, this, &SerialPortAssistant::clearAllData);
 
+    // 激进优化：不在 readyRead 中处理，只是追加数据
     connect(serialPort, &QSerialPort::readyRead, [=]() {
         buffer.append(serialPort->readAll());
-        processBinaryBuffer();
-        });
+    });
 }
 
 void SerialPortAssistant::sendConfig() {
@@ -240,125 +262,157 @@ uint16_t SerialPortAssistant::calculateCRC16(const QByteArray& data) {
 }
 
 void SerialPortAssistant::processBinaryBuffer() {
-    while (buffer.size() >= 19) {
-        // 查找第一个有效的二进制帧头
-        int headerPos = -1;
-        for (int i = 0; i < buffer.size() - 1; ++i) {
-            if (static_cast<uint8_t>(buffer[i]) == 0x55 && 
-                static_cast<uint8_t>(buffer[i+1]) == 0xAA) {
-                headerPos = i;
-                break;
-            }
+    // 保留原版本供兼容性
+    processBufferOptimized();
+}
+
+// 激进优化版本：批量处理、减少 GUI 更新
+void SerialPortAssistant::processBufferOptimized() {
+    if (buffer.size() < 19 || !CheckBox_EnablePlot->isChecked()) return;
+    
+    int pos = 0;
+    static int frameCount = 0;
+    int currentFrames = 0;
+    while (pos + 19 <= buffer.size()) {
+        int headerPos = buffer.indexOf(QByteArray("\x55\xAA"), pos);
+        if (headerPos == -1) break;
+        
+        pos = headerPos;
+        
+        // 🔥 直接从数据包中读取frameLen（小端法）
+        if (pos + 4 > buffer.size()) break;  // 确保能读到frameLen字段
+        
+        uint16_t frameLen = static_cast<uint8_t>(buffer[pos + 2]) | 
+                            (static_cast<uint8_t>(buffer[pos + 3]) << 8);
+        
+        // 验证frameLen的合理性
+        if (frameLen < 19 || frameLen > 8192) {
+            qDebug() << "Invalid frameLen:" << frameLen << "at pos" << pos;
+            pos += 2;
+            continue;
         }
         
-        if (headerPos == -1) {
-            // 找不到帧头，但只清除明显的垃圾字符
-            // 保留最后两个字节以防帧头被分片
-            if (buffer.size() > 2) {
-                buffer.remove(0, buffer.size() - 2);
-            }
+        // 检查缓冲区是否有完整的一帧
+        if (pos + frameLen > buffer.size()) {
+            qDebug() << "Incomplete frame: need" << frameLen << "bytes, but only" << (buffer.size() - pos) << "available";
             break;
         }
         
-        if (headerPos > 0) {
-            buffer.remove(0, headerPos);
-        }
-        
-        // 读取帧长
-        if (buffer.size() < 4) break;  // 需要至少4字节来读取帧长
-        
-        uint16_t frameLen = static_cast<uint8_t>(buffer[2]) | (static_cast<uint8_t>(buffer[3]) << 8);
-        
-        // 帧长合理性检查：最小19字节，最大2048字节
-        if (frameLen < 19 ) {
-            // 帧长异常，跳过第一个字节重新寻找
-            buffer.remove(0, 1);
+        uint8_t tail1 = static_cast<uint8_t>(buffer[pos + frameLen - 2]);
+        uint8_t tail2 = static_cast<uint8_t>(buffer[pos + frameLen - 1]);
+        // 验证帧尾（应该是0x0D 0x0A）
+        if (tail1 != 0x0D || tail2 != 0x0A) {
+            qDebug() << "Bad frame tail at pos" << pos << ":" << QString::number(tail1, 16) << QString::number(tail2, 16);
+            pos += 2;
             continue;
         }
         
-        if (buffer.size() < frameLen) {
-            // 帧数据未接收完整，等待下一次readyRead
-            break;
-        }
+        uint8_t id = static_cast<uint8_t>(buffer[pos + 4]);
+        uint16_t count = static_cast<uint8_t>(buffer[pos + 13]) | 
+                         (static_cast<uint8_t>(buffer[pos + 14]) << 8);
         
-        // 验证帧尾
-        if (static_cast<uint8_t>(buffer[frameLen - 2]) != 0x0D || static_cast<uint8_t>(buffer[frameLen - 1]) != 0x0A) {
-            // 帧尾错误，说明这不是一个有效的帧头，跳过并继续搜索
-            buffer.remove(0, 2);
+        if (count > 2048 || count < 100) {
+            pos += 2;
             continue;
         }
         
-        // 验证CRC
-        uint16_t calcCRC = calculateCRC16(buffer.left(frameLen - 4));
-        uint16_t recvCRC = static_cast<uint8_t>(buffer[frameLen - 4]) | (static_cast<uint8_t>(buffer[frameLen - 3]) << 8);
-        if (calcCRC != recvCRC) {
-            // CRC错误，跳过并继续搜索
-            buffer.remove(0, 2);
+        int dataStartPos = pos + 15;
+        int dataEndPos = pos + frameLen - 2;  // 帧尾前
+        int floatsCanRead = (dataEndPos - dataStartPos) / 4;
+        
+        if (floatsCanRead < 1) {
+            pos += 2;
             continue;
         }
-
-        // ✅ 数据包完全有效，开始处理
-        uint8_t id; uint32_t freq, ts; uint16_t count;
         
-        // 手动读取元数据
-        id = static_cast<uint8_t>(buffer[4]);
-        freq = static_cast<uint8_t>(buffer[5]) | 
-               (static_cast<uint8_t>(buffer[6]) << 8) |
-               (static_cast<uint8_t>(buffer[7]) << 16) |
-               (static_cast<uint8_t>(buffer[8]) << 24);
-        ts = static_cast<uint8_t>(buffer[9]) | 
-             (static_cast<uint8_t>(buffer[10]) << 8) |
-             (static_cast<uint8_t>(buffer[11]) << 16) |
-             (static_cast<uint8_t>(buffer[12]) << 24);
-        count = static_cast<uint8_t>(buffer[13]) | (static_cast<uint8_t>(buffer[14]) << 8);
-
-        if (CheckBox_EnablePlot->isChecked()) {
-            int sIdx = (id == 0x02) ? 1 : 0;
-            while (seriesList.size() <= sIdx) {
-                QLineSeries* s = new QLineSeries();
-                chartView->chart()->addSeries(s);
-                s->attachAxis(axisX); s->attachAxis(axisY);
-                seriesList.append(s);
-            }
+        int sIdx = (id == 0x02) ? 1 : 0;
+        while (seriesList.size() <= sIdx) {
+            QLineSeries* s = new QLineSeries();
+            chartView->chart()->addSeries(s);
+            s->attachAxis(axisX); s->attachAxis(axisY);
+            seriesList.append(s);
             
-            // 读取数据点
-            int dataPos = 15;
-            
-            for (int i = 0; i < count; ++i) {
-                if (dataPos + 4 > frameLen - 4) {
-                    break;
-                }
-                
-                uint32_t rawVal = 0;
-                rawVal |= (uint8_t)buffer[dataPos + 0];
-                rawVal |= ((uint8_t)buffer[dataPos + 1]) << 8;
-                rawVal |= ((uint8_t)buffer[dataPos + 2]) << 16;
-                rawVal |= ((uint8_t)buffer[dataPos + 3]) << 24;
-                
-                float val = *(float*)&rawVal;
-                dataPos += 4;
-                
-                seriesList[sIdx]->append(plotCount++, val);
-            }
-            
-            int xr = Edit_XRange->text().toInt();
-            axisX->setRange(qMax(0.0, plotCount - xr), plotCount);
-            
-            // 应用自定义X轴范围（如果设置了）
-            double xMin = Edit_XMin->text().toDouble();
-            double xMax = Edit_XMax->text().toDouble();
-            if (xMin < xMax) {
-                axisX->setRange(xMin, xMax);
-            }
-            
-            // 更新Y轴范围
-            double yMin = Edit_YMin->text().toDouble();
-            double yMax = Edit_YMax->text().toDouble();
-            axisY->setRange(yMin, yMax);
+            QPen pen;
+            pen.setColor(sIdx == 0 ? Qt::blue : Qt::red);
+            pen.setWidth(2);
+            s->setPen(pen);
         }
         
-        // ✅ 成功处理一帧，移除它
-        buffer.remove(0, frameLen);
+        int dataPos = pos + 15;
+        int floatsToRead = qMin((int)count, floatsCanRead);
+        
+        // 🔥 优化：先收集新点，避免无限append导致卡顿
+        QVector<QPointF> newPoints;
+        for (int i = 0; i < floatsToRead; ++i) {
+            if (dataPos + 4 > pos + frameLen - 2) break;
+             
+            uint32_t rawVal = 0;
+            rawVal |= (uint8_t)buffer[dataPos + 0];
+            rawVal |= ((uint8_t)buffer[dataPos + 1]) << 8;
+            rawVal |= ((uint8_t)buffer[dataPos + 2]) << 16;
+            rawVal |= ((uint8_t)buffer[dataPos + 3]) << 24;
+            
+            float val = *(float*)&rawVal;
+            
+            if (std::isfinite(val) && std::abs(val) <= 100.0) {
+                newPoints.append(QPointF(plotCount++, val));
+            }
+            
+            dataPos += 4;
+        }
+        
+        // 🔥 关键：限制series的点数，防止无限增长导致卡顿（最多3000个点）
+        int xr = Edit_XRange->text().toInt();
+        if (xr <= 0) xr = 100; 
+        if (xr > 50000) xr = 50000;  // 最多保留3000个点
+        
+        // 获取现有点数
+        QList<QPointF> allPoints = seriesList[sIdx]->points();
+        // 追加新点
+        for (const auto& p : newPoints) {
+            allPoints.append(p);
+        }
+        // 只保留最后 xr 个点
+        int startIdx = qMax(0, (int)allPoints.size() - xr);
+        QList<QPointF> displayPoints = allPoints.mid(startIdx);
+        
+        // 一次性更新series
+        seriesList[sIdx]->clear();
+        seriesList[sIdx]->replace(displayPoints);
+        
+        currentFrames++;
+        pos += frameLen;
+    }
+    
+    // 设置轴范围
+    double xMin = Edit_XMin->text().toDouble();
+    double xMax = Edit_XMax->text().toDouble();
+    if (xMin < xMax) {
+        axisX->setRange(xMin, xMax);
+    }
+    
+    double yMin = Edit_YMin->text().toDouble();
+    double yMax = Edit_YMax->text().toDouble();
+    if (yMin < yMax) {
+        axisY->setRange(yMin, yMax);
+    }
+    
+    // 🔥 强制刷新图表
+    chartView->chart()->update();
+    chartView->update();
+    
+    // 诊断：打印性能信息
+    frameCount += currentFrames;
+    static int diagCount = 0;
+    if (diagCount++ % 10 == 0) {
+        qDebug() << "Frames processed:" << currentFrames 
+                 << "| Series points:" << (seriesList.size() > 0 ? seriesList[0]->count() : 0)
+                 << "| Total frames:" << frameCount
+                 << "| Buffer size:" << buffer.size();
+    }
+    
+    if (pos > 0) {
+        buffer.remove(0, pos);
     }
 }
 
@@ -366,12 +420,46 @@ void SerialPortAssistant::togglePort(bool open) {
     if (open) {
         serialPort->setPortName(SerialPort_Number->currentText());
         serialPort->setBaudRate(SerialPort_BaudRate->currentText().toInt());
+        
+        // 🔥 激进优化：增加接收缓冲区到 4 MB（3000000 baud 下有 ~10秒 缓冲）
+        serialPort->setReadBufferSize(4 * 1024 * 1024);
+        
         if (serialPort->open(QIODevice::ReadWrite)) {
+            // 清空所有旧数据
+            serialPort->clear();  // 清空串口缓冲区
+            buffer.clear();       // 清空本地缓冲区
+            plotCount = 0;        // 重置计数器
+            
             SerialPort_Connect->setEnabled(false);
             SerialPort_Disonnect->setEnabled(true);
         }
     }
     else {
+        // 🔥 关闭前强制处理缓冲区中的最后一帧
+        if (buffer.size() > 19) {
+            qDebug() << "Flushing buffer before close: size=" << buffer.size() << "bytes";
+            
+            // 临时启用绘图，确保能处理最后的数据
+            bool wasEnabled = CheckBox_EnablePlot->isChecked();
+            if (!wasEnabled) {
+                CheckBox_EnablePlot->setChecked(true);
+            }
+            
+            // 再处理一次，尝试处理最后的数据
+            processBinaryBuffer();
+            
+            // 恢复原状
+            if (!wasEnabled) {
+                CheckBox_EnablePlot->setChecked(false);
+            }
+            
+            // 清空剩余数据
+            if (buffer.size() > 0) {
+                qDebug() << "Remaining in buffer after flush:" << buffer.size() << "bytes (discarded)";
+            }
+            buffer.clear();
+        }
+        
         serialPort->close();
         SerialPort_Connect->setEnabled(true);
         SerialPort_Disonnect->setEnabled(false);

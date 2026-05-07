@@ -42,6 +42,7 @@ private:
     void sendConfig();
     void processBinaryBuffer();
     uint16_t calculateCRC16(const QByteArray& data);
+    void processBufferOptimized();  // 优化的定时器处理版本
 
     // UI 组件
     QPlainTextEdit* SerialPort_ReceiveAear;
