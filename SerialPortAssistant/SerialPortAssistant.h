@@ -20,6 +20,10 @@
 #include <QSpinBox>
 #include <QDoubleSpinBox>
 #include <QDataStream>
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
+#include <QTimer>
 
 QT_CHARTS_USE_NAMESPACE
 
@@ -42,20 +46,27 @@ private:
     void sendConfig();
     void processBinaryBuffer();
     uint16_t calculateCRC16(const QByteArray& data);
-    void processBufferOptimized();  // 优化的定时器处理版本
+    void processBufferOptimized();
+
+    // CSV 保存相关
+    void startCSVLogging();
+    void stopCSVLogging();
+    void flushCSVBuffer();
+    void onSaveCSVToggled(bool checked);
 
     // UI 组件
     QPlainTextEdit* SerialPort_ReceiveAear;
     QPushButton* SerialPort_Connect, * SerialPort_Disonnect, * SerialPort_Send, * Btn_ResetPlot;
     QComboBox* SerialPort_Number, * SerialPort_BaudRate, * Combo_Mode;
 
-    // 修改处：将 SpinBox 数组改为 ComboBox 数组以支持下拉选择[cite: 16]
     QComboBox* Combo_Configs[4];
 
     QCheckBox* CheckBox_SaveCSV, * CheckBox_EnablePlot;
     QLineEdit* Edit_XRange;
     QLineEdit* Edit_XMin, * Edit_XMax;
     QLineEdit* Edit_YMin, * Edit_YMax;
+    QLineEdit* Edit_YRightMin;
+    QLineEdit* Edit_YRightMax;
     QScrollBar* ScrollBar_X;
 
     QDoubleSpinBox* Spin_Floats[6];
@@ -64,15 +75,23 @@ private:
     // 图表与逻辑
     QChartView* chartView;
     QValueAxis* axisX, * axisY;
+    QValueAxis* axisYRight;
     QList<QLineSeries*> seriesList;
     QByteArray buffer;
     QSerialPort* serialPort;
     QVector<QString> lastPortList;
-    
-    // 🔥 全局时间跟踪
-    uint32_t baseSamplingRate = 0;   // 基础采样率（来自第一帧0x01或0x02）
-    uint64_t globalSamplePairCount = 0;  // 对于0x01，已处理的数据对数（每对=1个采样点）
-    uint64_t globalOpticalSampleCount = 0;  // 对于0x02，已处理的光采样点数
+
+    // 全局时间跟踪
+    uint32_t baseSamplingRate = 0;
+    uint64_t globalSamplePairCount = 0;
+    uint64_t globalOpticalSampleCount = 0;
+
+    // CSV 保存相关成员
+    QFile* m_csvFile = nullptr;
+    QTextStream* m_csvStream = nullptr;
+    QStringList m_csvBuffer;
+    QTimer* m_csvFlushTimer;
+    bool m_isSaving = false;
 };
 
 #endif // SERIALPORTASSISTANT_H
