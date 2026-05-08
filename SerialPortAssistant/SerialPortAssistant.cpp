@@ -340,17 +340,33 @@ void SerialPortAssistant::processBufferOptimized() {
             continue;
         }
         
+        // 🔥 根据新协议读取字段
         uint8_t id = static_cast<uint8_t>(buffer[pos + 4]);
+        
+        // 读取采样频率 (Fs) - 位于 pos+5~8，小端序 uint32_t
+        uint32_t fs = static_cast<uint8_t>(buffer[pos + 5]) |
+                      (static_cast<uint8_t>(buffer[pos + 6]) << 8) |
+                      (static_cast<uint8_t>(buffer[pos + 7]) << 16) |
+                      (static_cast<uint8_t>(buffer[pos + 8]) << 24);
+        
+        // 读取数据量 (N) - 位于 pos+13~14，小端序 uint16_t
         uint16_t count = static_cast<uint8_t>(buffer[pos + 13]) | 
                          (static_cast<uint8_t>(buffer[pos + 14]) << 8);
         
-        if (count > 2048 || count < 100) {
+        if (count > 2048 || count < 1 || fs == 0) {
+            qDebug() << "Invalid frame: count=" << count << "fs=" << fs;
             pos += 2;
             continue;
         }
         
+        // 🔥 初始化基础采样率（从第一个有效帧获取）
+        if (baseSamplingRate == 0) {
+            baseSamplingRate = fs;
+            qDebug() << "Base sampling rate set to:" << baseSamplingRate << "Hz";
+        }
+        
         int dataStartPos = pos + 15;
-        int dataEndPos = pos + frameLen - 4;  // CRC之前（不是帧尾之前）
+        int dataEndPos = pos + frameLen - 4;  // CRC之前
         int floatsCanRead = (dataEndPos - dataStartPos) / 4;
         
         if (floatsCanRead < 1) {
@@ -358,15 +374,20 @@ void SerialPortAssistant::processBufferOptimized() {
             continue;
         }
         
-        int sIdx = (id == 0x02) ? 1 : 0;
-        while (seriesList.size() <= sIdx) {
+        // 根据ID确定需要多少条曲线
+        int seriesCount = (id == 0x01) ? 2 : (id == 0x02 ? 3 : 1);
+        
+        // 确保有足够的曲线
+        while (seriesList.size() < seriesCount) {
             QLineSeries* s = new QLineSeries();
             chartView->chart()->addSeries(s);
             s->attachAxis(axisX); s->attachAxis(axisY);
             seriesList.append(s);
             
             QPen pen;
-            pen.setColor(sIdx == 0 ? Qt::blue : Qt::red);
+            if (seriesList.size() == 1) pen.setColor(Qt::blue);      // 第一条曲线 - 蓝色
+            else if (seriesList.size() == 2) pen.setColor(Qt::red);  // 第二条曲线 - 红色
+            else if (seriesList.size() == 3) pen.setColor(Qt::green); // 第三条曲线 - 绿色
             pen.setWidth(2);
             s->setPen(pen);
         }
@@ -374,44 +395,124 @@ void SerialPortAssistant::processBufferOptimized() {
         int dataPos = pos + 15;
         int floatsToRead = qMin((int)count, floatsCanRead);
         
-        // 🔥 优化：先收集新点，避免无限append导致卡顿
-        QVector<QPointF> newPoints;
-        for (int i = 0; i < floatsToRead; ++i) {
-            if (dataPos + 4 > pos + frameLen - 4) break;  // CRC之前
-             
-            uint32_t rawVal = 0;
-            rawVal |= (uint8_t)buffer[dataPos + 0];
-            rawVal |= ((uint8_t)buffer[dataPos + 1]) << 8;
-            rawVal |= ((uint8_t)buffer[dataPos + 2]) << 16;
-            rawVal |= ((uint8_t)buffer[dataPos + 3]) << 24;
-            
-            float val = *(float*)&rawVal;
-            
-            if (std::isfinite(val) && std::abs(val) <= 100.0) {
-                newPoints.append(QPointF(plotCount++, val));
+        // 🔥 收集新点，根据ID类型处理不同的数据
+        QVector<QPointF> newPoints[3];  // 最多3条曲线
+        
+        if (id == 0x01) {
+            // ID=0x01: IV数据 - 分离电压和电流
+            // 数据格式: 电压、电流、电压、电流...
+            // 每对(电压+电流)对应一个采样点，使用全局基础采样率计算时间
+            int pairsInThisFrame = count / 2;
+            for (int pairIdx = 0; pairIdx < pairsInThisFrame; ++pairIdx) {
+                // 🔥 使用全局计数器计算时间，确保连续性
+                uint64_t globalPairIdx = globalSamplePairCount + pairIdx;
+                double timeX = (double)globalPairIdx / baseSamplingRate;
+                
+                // 读取电压数据（偶数索引）
+                if (dataPos + 4 <= dataEndPos) {
+                    uint32_t rawVal = 0;
+                    rawVal |= (uint8_t)buffer[dataPos + 0];
+                    rawVal |= ((uint8_t)buffer[dataPos + 1]) << 8;
+                    rawVal |= ((uint8_t)buffer[dataPos + 2]) << 16;
+                    rawVal |= ((uint8_t)buffer[dataPos + 3]) << 24;
+                    
+                    float voltageVal = *(float*)&rawVal;
+                    if (std::isfinite(voltageVal)) {
+                        newPoints[0].append(QPointF(timeX, voltageVal));
+                    }
+                    dataPos += 4;
+                }
+                
+                // 读取电流数据（奇数索引）
+                if (dataPos + 4 <= dataEndPos) {
+                    uint32_t rawVal = 0;
+                    rawVal |= (uint8_t)buffer[dataPos + 0];
+                    rawVal |= ((uint8_t)buffer[dataPos + 1]) << 8;
+                    rawVal |= ((uint8_t)buffer[dataPos + 2]) << 16;
+                    rawVal |= ((uint8_t)buffer[dataPos + 3]) << 24;
+                    
+                    float currentVal = *(float*)&rawVal;
+                    if (std::isfinite(currentVal)) {
+                        newPoints[1].append(QPointF(timeX, currentVal));
+                    }
+                    dataPos += 4;
+                }
             }
-            
-            dataPos += 4;
+            // 🔥 更新全局对计数器
+            globalSamplePairCount += pairsInThisFrame;
+        } else if (id == 0x02) {
+            // ID=0x02: 光数据 - 单条曲线，X轴基于全局基础采样率
+            for (int i = 0; i < floatsToRead; ++i) {
+                if (dataPos + 4 > dataEndPos) break;
+                
+                uint32_t rawVal = 0;
+                rawVal |= (uint8_t)buffer[dataPos + 0];
+                rawVal |= ((uint8_t)buffer[dataPos + 1]) << 8;
+                rawVal |= ((uint8_t)buffer[dataPos + 2]) << 16;
+                rawVal |= ((uint8_t)buffer[dataPos + 3]) << 24;
+                
+                float val = *(float*)&rawVal;
+                
+                if (std::isfinite(val)) {
+                    // 🔥 使用全局计数器和基础采样率计算时间，确保与0x01在同一时间轴
+                    uint64_t globalSampleIdx = globalOpticalSampleCount + i;
+                    double timeX = (double)globalSampleIdx / baseSamplingRate;
+                    newPoints[2].append(QPointF(timeX, val));
+                }
+                
+                dataPos += 4;
+            }
+            // 🔥 更新全局光采样计数器
+            globalOpticalSampleCount += floatsToRead;
+        } else {
+            // 其他ID：默认处理为单条曲线
+            for (int i = 0; i < floatsToRead; ++i) {
+                if (dataPos + 4 > dataEndPos) break;
+                
+                uint32_t rawVal = 0;
+                rawVal |= (uint8_t)buffer[dataPos + 0];
+                rawVal |= ((uint8_t)buffer[dataPos + 1]) << 8;
+                rawVal |= ((uint8_t)buffer[dataPos + 2]) << 16;
+                rawVal |= ((uint8_t)buffer[dataPos + 3]) << 24;
+                
+                float val = *(float*)&rawVal;
+                
+                if (std::isfinite(val)) {
+                    // 使用全局基础采样率计算时间
+                    uint64_t globalSampleIdx = globalOpticalSampleCount + i;
+                    double timeX = (double)globalSampleIdx / baseSamplingRate;
+                    newPoints[0].append(QPointF(timeX, val));
+                }
+                
+                dataPos += 4;
+            }
+            // 更新全局计数器
+            globalOpticalSampleCount += floatsToRead;
         }
         
-        // 🔥 关键：限制series的点数，防止无限增长导致卡顿（最多3000个点）
+        // 🔥 关键：限制series的点数，防止无限增长导致卡顿
         int xr = Edit_XRange->text().toInt();
         if (xr <= 0) xr = 100; 
-        if (xr > 50000) xr = 50000;  // 最多保留3000个点
+        if (xr > 50000) xr = 50000;
         
-        // 获取现有点数
-        QList<QPointF> allPoints = seriesList[sIdx]->points();
-        // 追加新点
-        for (const auto& p : newPoints) {
-            allPoints.append(p);
+        // 更新所有活跃的曲线
+        for (int sIdx = 0; sIdx < seriesCount && sIdx < 3; ++sIdx) {
+            if (newPoints[sIdx].isEmpty()) continue;
+            
+            // 获取现有点数
+            QList<QPointF> allPoints = seriesList[sIdx]->points();
+            // 追加新点
+            for (const auto& p : newPoints[sIdx]) {
+                allPoints.append(p);
+            }
+            // 只保留最后 xr 个点
+            int startIdx = qMax(0, (int)allPoints.size() - xr);
+            QList<QPointF> displayPoints = allPoints.mid(startIdx);
+            
+            // 一次性更新series
+            seriesList[sIdx]->clear();
+            seriesList[sIdx]->replace(displayPoints);
         }
-        // 只保留最后 xr 个点
-        int startIdx = qMax(0, (int)allPoints.size() - xr);
-        QList<QPointF> displayPoints = allPoints.mid(startIdx);
-        
-        // 一次性更新series
-        seriesList[sIdx]->clear();
-        seriesList[sIdx]->replace(displayPoints);
         
         currentFrames++;
         pos += frameLen;
@@ -438,10 +539,33 @@ void SerialPortAssistant::processBufferOptimized() {
     frameCount += currentFrames;
     static int diagCount = 0;
     if (diagCount++ % 10 == 0) {
+        int xr = Edit_XRange->text().toInt();
+        if (xr <= 0) xr = 100;
+        
+        int usedPoints = (seriesList.size() > 0) ? seriesList[0]->count() : 0;
+        int usedPercent = (xr > 0) ? (usedPoints * 100 / xr) : 0;
+        
         qDebug() << "Frames processed:" << currentFrames 
-                 << "| Series points:" << (seriesList.size() > 0 ? seriesList[0]->count() : 0)
+                 << "| Series points:" << usedPoints
+                 << "| X-Range capacity:" << xr
+                 << "| Used:" << usedPercent << "%"
                  << "| Total frames:" << frameCount
                  << "| Buffer size:" << buffer.size();
+        
+        // 🔥 在接收区显示波形使用情况（每500帧显示一次）
+        static int statusCount = 0;
+        if (statusCount++ % 5 == 0) {
+            // 使用英文显示，避免中文乱码问题
+            SerialPort_ReceiveAear->appendPlainText(
+                QString("[Waveform Status] Used: %1/%2 points (%3%%) | Frames: %4 | 0x01 Pairs: %5 | 0x02 Samples: %6")
+                    .arg(usedPoints)
+                    .arg(xr)
+                    .arg(usedPercent)
+                    .arg(frameCount)
+                    .arg(globalSamplePairCount)
+                    .arg(globalOpticalSampleCount)
+            );
+        }
     }
     
     if (pos > 0) {
@@ -468,7 +592,16 @@ void SerialPortAssistant::togglePort(bool open) {
             // 清空所有旧数据
             serialPort->clear();  // 清空串口缓冲区
             buffer.clear();       // 清空本地缓冲区
-            plotCount = 0;        // 重置计数器
+            
+            // 清空所有曲线数据
+            for (auto s : seriesList) {
+                s->clear();
+            }
+            
+            // 🔥 重置全局时间跟踪
+            baseSamplingRate = 0;
+            globalSamplePairCount = 0;
+            globalOpticalSampleCount = 0;
             
             SerialPort_Connect->setEnabled(false);
             SerialPort_Disonnect->setEnabled(true);
@@ -507,8 +640,14 @@ void SerialPortAssistant::togglePort(bool open) {
 }
 
 void SerialPortAssistant::clearAllData() {
-    plotCount = 0;
     for (auto s : seriesList) s->clear();
+    
+    // 🔥 重置全局时间跟踪，使下次数据从x=0开始
+    baseSamplingRate = 0;
+    globalSamplePairCount = 0;
+    globalOpticalSampleCount = 0;
+    
+    SerialPort_ReceiveAear->appendPlainText(QString::fromUtf8("[系统] 图表已重置，全局计数器已清零"));
 }
 
 void SerialPortAssistant::updatePortList() {

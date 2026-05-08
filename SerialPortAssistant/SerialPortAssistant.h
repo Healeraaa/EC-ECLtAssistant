@@ -64,11 +64,15 @@ private:
     // 图表与逻辑
     QChartView* chartView;
     QValueAxis* axisX, * axisY;
-     QList<QLineSeries*> seriesList;
+    QList<QLineSeries*> seriesList;
     QByteArray buffer;
-    double plotCount = 0;
     QSerialPort* serialPort;
     QVector<QString> lastPortList;
+    
+    // 🔥 全局时间跟踪
+    uint32_t baseSamplingRate = 0;   // 基础采样率（来自第一帧0x01或0x02）
+    uint64_t globalSamplePairCount = 0;  // 对于0x01，已处理的数据对数（每对=1个采样点）
+    uint64_t globalOpticalSampleCount = 0;  // 对于0x02，已处理的光采样点数
 };
 
 #endif // SERIALPORTASSISTANT_H
