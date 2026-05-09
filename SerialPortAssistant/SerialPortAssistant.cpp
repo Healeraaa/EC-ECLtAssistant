@@ -5,7 +5,7 @@
 #include <cmath>
 
 SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) {
-    this->setWindowTitle(QString::fromUtf8("EC-ECL 电化学工作站"));
+    this->setWindowTitle(QString::fromUtf8("EC-ECL Recorder"));
     this->setMinimumSize(1280, 900);
     serialPort = new QSerialPort(this);
 
@@ -16,6 +16,7 @@ SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) 
     connect(processTimer, &QTimer::timeout, this, &SerialPortAssistant::processBinaryBuffer);
     processTimer->start(1);
 
+    // CSV 缓冲区定时刷新（每秒写一次文件）
     m_csvFlushTimer = new QTimer(this);
     connect(m_csvFlushTimer, &QTimer::timeout, this, &SerialPortAssistant::flushCSVBuffer);
 
@@ -23,19 +24,23 @@ SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) 
     updatePortList();
 }
 
-// ---------- UI 构建 ----------
 void SerialPortAssistant::initUI() {
     QWidget* centralWidget = new QWidget(this);
     this->setCentralWidget(centralWidget);
     QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
     QVBoxLayout* leftLayout = new QVBoxLayout();
 
+    // 1. 接收区与图表 (左侧)
     SerialPort_ReceiveAear = new QPlainTextEdit();
     SerialPort_ReceiveAear->setReadOnly(true);
-    leftLayout->addWidget(new QLabel(QString::fromUtf8("接收数据:")), 0);
+    leftLayout->addWidget(new QLabel(QString::fromUtf8("调试数据:")), 0);
     leftLayout->addWidget(SerialPort_ReceiveAear, 2);
 
     QChart* chart = new QChart();
+    // 开启图例
+    chart->legend()->setVisible(true);
+    chart->legend()->setAlignment(Qt::AlignBottom);
+
     axisX = new QValueAxis(); axisX->setRange(0, 100);
     axisY = new QValueAxis(); axisY->setRange(-2, 2);
     axisYRight = new QValueAxis();
@@ -50,6 +55,7 @@ void SerialPortAssistant::initUI() {
     ScrollBar_X->setVisible(false);
     leftLayout->addWidget(ScrollBar_X);
 
+    // 2. 参数配置区 (右侧)
     QVBoxLayout* rightLayout = new QVBoxLayout();
     QWidget* configWidget = new QWidget();
     configWidget->setFixedWidth(350);
@@ -134,6 +140,7 @@ void SerialPortAssistant::initUI() {
     CheckBox_EnablePlot = new QCheckBox(QString::fromUtf8("启用波形"));
     CheckBox_EnablePlot->setChecked(true);
     CheckBox_SaveCSV = new QCheckBox(QString::fromUtf8("保存CSV"));
+    CheckBox_SaveCSV->setChecked(true);
     grid->addWidget(CheckBox_EnablePlot, row++, 0);
     grid->addWidget(CheckBox_SaveCSV, row++, 0);
 
@@ -177,7 +184,6 @@ void SerialPortAssistant::initUI() {
     updateChemLabels(0);
 }
 
-// ---------- 模式切换参数 ----------
 void SerialPortAssistant::updateChemLabels(int index) {
     QStringList labels;
     if (index == 0) {
@@ -215,7 +221,6 @@ void SerialPortAssistant::updateChemLabels(int index) {
     }
 }
 
-// ---------- 信号连接 ----------
 void SerialPortAssistant::setupConnections() {
     connect(SerialPort_Connect, &QPushButton::clicked, [=]() { togglePort(true); });
     connect(SerialPort_Disonnect, &QPushButton::clicked, [=]() { togglePort(false); });
@@ -225,30 +230,32 @@ void SerialPortAssistant::setupConnections() {
     connect(serialPort, &QSerialPort::readyRead, [=]() {
         buffer.append(serialPort->readAll());
         });
+    // 动态启停 CSV 记录
     connect(CheckBox_SaveCSV, &QCheckBox::toggled, this, &SerialPortAssistant::onSaveCSVToggled);
 }
 
-// ---------- 配置发送 ----------
 void SerialPortAssistant::sendConfig() {
     if (!serialPort->isOpen()) return;
+
     QString dLine = QString("ceiod:%1,%2,%3,%4,%5\n")
         .arg(Combo_Mode->currentIndex())
         .arg(Combo_Configs[0]->currentData().toInt())
         .arg(Combo_Configs[1]->currentData().toInt())
         .arg(Combo_Configs[2]->currentData().toInt())
         .arg(Combo_Configs[3]->currentData().toInt());
+
     QString fLine = "ceiof:";
     for (int i = 0; i < 6; ++i) {
         fLine += QString::number(Spin_Floats[i]->value(), 'f', 6);
         if (i < 5) fLine += ",";
     }
     fLine += "\n";
+
     QByteArray packet = (dLine + fLine).toLocal8Bit();
     serialPort->write(packet);
     SerialPort_ReceiveAear->appendPlainText(QString::fromUtf8("[发送配置] -> ") + dLine.trimmed() + " | " + fLine.trimmed());
 }
 
-// ---------- CRC 计算 ----------
 uint16_t SerialPortAssistant::calculateCRC16(const QByteArray& data) {
     uint16_t crc = 0xFFFF;
     for (int i = 0; i < data.size(); i++) {
@@ -261,12 +268,10 @@ uint16_t SerialPortAssistant::calculateCRC16(const QByteArray& data) {
     return crc;
 }
 
-// ---------- 数据处理入口 ----------
 void SerialPortAssistant::processBinaryBuffer() {
     processBufferOptimized();
 }
 
-// ---------- 解析二进制帧并更新图表 / CSV ----------
 void SerialPortAssistant::processBufferOptimized() {
     if (buffer.size() < 19 || !CheckBox_EnablePlot->isChecked()) return;
 
@@ -274,7 +279,6 @@ void SerialPortAssistant::processBufferOptimized() {
     static int frameCount = 0;
     static bool firstFrameLogged = false;
     int currentFrames = 0;
-
     while (pos + 19 <= buffer.size()) {
         int headerPos = buffer.indexOf(QByteArray("\x55\xAA"), pos);
         if (headerPos == -1) break;
@@ -284,22 +288,32 @@ void SerialPortAssistant::processBufferOptimized() {
             qDebug() << ">>> FIRST FRAME HEADER at pos:" << pos << "bufferSize:" << buffer.size();
             firstFrameLogged = true;
         }
+
         if (pos + 4 > buffer.size()) break;
 
         uint16_t frameLen = static_cast<uint8_t>(buffer[pos + 2]) |
             (static_cast<uint8_t>(buffer[pos + 3]) << 8);
-        if (frameLen < 19 || frameLen > 8192) { pos += 2; continue; }
+        if (frameLen < 19 || frameLen > 8192) {
+            pos += 2;
+            continue;
+        }
         if (pos + frameLen > buffer.size()) break;
 
         uint8_t tail1 = static_cast<uint8_t>(buffer[pos + frameLen - 2]);
         uint8_t tail2 = static_cast<uint8_t>(buffer[pos + frameLen - 1]);
-        if (tail1 != 0x0D || tail2 != 0x0A) { pos += 2; continue; }
+        if (tail1 != 0x0D || tail2 != 0x0A) {
+            pos += 2;
+            continue;
+        }
 
         QByteArray frameData = buffer.mid(pos, frameLen - 4);
         uint16_t calculatedCRC = calculateCRC16(frameData);
         uint16_t frameCRC = static_cast<uint8_t>(buffer[pos + frameLen - 4]) |
             (static_cast<uint8_t>(buffer[pos + frameLen - 3]) << 8);
-        if (calculatedCRC != frameCRC) { pos += 2; continue; }
+        if (calculatedCRC != frameCRC) {
+            pos += 2;
+            continue;
+        }
 
         uint8_t id = static_cast<uint8_t>(buffer[pos + 4]);
         uint32_t fs = static_cast<uint8_t>(buffer[pos + 5]) |
@@ -308,25 +322,47 @@ void SerialPortAssistant::processBufferOptimized() {
             (static_cast<uint8_t>(buffer[pos + 8]) << 24);
         uint16_t count = static_cast<uint8_t>(buffer[pos + 13]) |
             (static_cast<uint8_t>(buffer[pos + 14]) << 8);
-        if (count > 2048 || count < 1 || fs == 0) { pos += 2; continue; }
+        if (count > 2048 || count < 1 || fs == 0) {
+            pos += 2;
+            continue;
+        }
 
-        if (baseSamplingRate == 0) baseSamplingRate = fs;
+        if (baseSamplingRate == 0) {
+            baseSamplingRate = fs;
+        }
 
         int dataEndPos = pos + frameLen - 4;
         int floatsCanRead = (dataEndPos - (pos + 15)) / 4;
-        if (floatsCanRead < 1) { pos += 2; continue; }
+        if (floatsCanRead < 1) {
+            pos += 2;
+            continue;
+        }
 
         int seriesCount = (id == 0x01) ? 2 : (id == 0x02 ? 3 : 1);
         while (seriesList.size() < seriesCount) {
             QLineSeries* s = new QLineSeries();
             chartView->chart()->addSeries(s);
             s->attachAxis(axisX);
-            if (seriesList.size() == 2 && seriesCount == 3) s->attachAxis(axisYRight);
-            else s->attachAxis(axisY);
+            if (seriesList.size() == 2 && seriesCount == 3) {
+                s->attachAxis(axisYRight);
+            }
+            else {
+                s->attachAxis(axisY);
+            }
             QPen pen;
-            if (seriesList.size() == 0) pen.setColor(Qt::blue);
-            else if (seriesList.size() == 1) pen.setColor(Qt::red);
-            else pen.setColor(Qt::green);
+            // 根据索引设置颜色和名字（英文标注）
+            if (seriesList.size() == 0) {
+                pen.setColor(Qt::blue);
+                s->setName("Voltage");
+            }
+            else if (seriesList.size() == 1) {
+                pen.setColor(Qt::red);
+                s->setName("Current");
+            }
+            else {
+                pen.setColor(Qt::green);
+                s->setName("Optical");
+            }
             pen.setWidth(2);
             s->setPen(pen);
             seriesList.append(s);
@@ -334,16 +370,21 @@ void SerialPortAssistant::processBufferOptimized() {
 
         int dataPos = pos + 15;
         int floatsToRead = qMin((int)count, floatsCanRead);
-        QVector<QPointF> newPoints[3];
+        QVector<QPointF> newPoints[3];       // 0:电压(或默认), 1:电流, 2:光信号
 
-        // 数据提取与 CSV 地图填充
+        // 解析数据点，并临时收集时间与数值用于 CSV 行生成
+        QVector<double> csvTimes;
+        QVector<double> csvV; // 电压
+        QVector<double> csvI; // 电流
+        QVector<double> csvO; // 光信号
+
         if (id == 0x01) {
             int pairsInThisFrame = count / 2;
             for (int pairIdx = 0; pairIdx < pairsInThisFrame; ++pairIdx) {
                 uint64_t globalPairIdx = globalSamplePairCount + pairIdx;
                 double timeX = (double)globalPairIdx / baseSamplingRate;
 
-                double vVal = qQNaN(), cVal = qQNaN();
+                // 电压
                 if (dataPos + 4 <= dataEndPos) {
                     uint32_t rawVal = (uint8_t)buffer[dataPos] |
                         ((uint8_t)buffer[dataPos + 1]) << 8 |
@@ -352,11 +393,16 @@ void SerialPortAssistant::processBufferOptimized() {
                     float voltageVal = *(float*)&rawVal;
                     if (std::isfinite(voltageVal)) {
                         newPoints[0].append(QPointF(timeX, voltageVal));
-                        vVal = voltageVal;
+                        csvTimes.append(timeX);
+                        csvV.append(voltageVal);
+                        csvI.append(qQNaN());   // 占位，后续处理
+                        csvO.append(qQNaN());
                     }
                     dataPos += 4;
                 }
                 else break;
+
+                // 电流
                 if (dataPos + 4 <= dataEndPos) {
                     uint32_t rawVal = (uint8_t)buffer[dataPos] |
                         ((uint8_t)buffer[dataPos + 1]) << 8 |
@@ -365,18 +411,12 @@ void SerialPortAssistant::processBufferOptimized() {
                     float currentVal = *(float*)&rawVal;
                     if (std::isfinite(currentVal)) {
                         newPoints[1].append(QPointF(timeX, currentVal));
-                        cVal = currentVal;
+                        // 替换占位的 NaN 为真实电流值
+                        csvI.last() = currentVal;
                     }
                     dataPos += 4;
                 }
                 else break;
-
-                if (m_isSaving) {
-                    qint64 key = (qint64)std::llround(timeX * 1e6);
-                    CsvRow& row = m_csvMap[key];
-                    if (!qIsNaN(vVal)) row.voltage = vVal;
-                    if (!qIsNaN(cVal)) row.current = cVal;
-                }
             }
             globalSamplePairCount += pairsInThisFrame;
         }
@@ -392,11 +432,10 @@ void SerialPortAssistant::processBufferOptimized() {
                     uint64_t globalSampleIdx = globalOpticalSampleCount + i;
                     double timeX = (double)globalSampleIdx / baseSamplingRate;
                     newPoints[2].append(QPointF(timeX, val));
-
-                    if (m_isSaving) {
-                        qint64 key = (qint64)std::llround(timeX * 1e6);
-                        m_csvMap[key].optical = val;
-                    }
+                    csvTimes.append(timeX);
+                    csvV.append(qQNaN());
+                    csvI.append(qQNaN());
+                    csvO.append(val);
                 }
                 dataPos += 4;
             }
@@ -414,18 +453,32 @@ void SerialPortAssistant::processBufferOptimized() {
                     uint64_t globalSampleIdx = globalOpticalSampleCount + i;
                     double timeX = (double)globalSampleIdx / baseSamplingRate;
                     newPoints[0].append(QPointF(timeX, val));
-
-                    if (m_isSaving) {
-                        qint64 key = (qint64)std::llround(timeX * 1e6);
-                        m_csvMap[key].voltage = val;
-                    }
+                    csvTimes.append(timeX);
+                    csvV.append(val);
+                    csvI.append(qQNaN());
+                    csvO.append(qQNaN());
                 }
                 dataPos += 4;
             }
             globalOpticalSampleCount += floatsToRead;
         }
 
-        // 图表更新
+        // 将 CSV 行加入内存缓冲区，格式: Time, Voltage, Current, Optical
+        if (m_isSaving && !csvTimes.isEmpty()) {
+            for (int i = 0; i < csvTimes.size(); ++i) {
+                double t = csvTimes[i];
+                QString vStr = qIsNaN(csvV[i]) ? "" : QString::number(csvV[i], 'f', 6);
+                QString iStr = qIsNaN(csvI[i]) ? "" : QString::number(csvI[i], 'f', 6);
+                QString oStr = qIsNaN(csvO[i]) ? "" : QString::number(csvO[i], 'f', 6);
+                m_csvBuffer.append(QString("%1,%2,%3,%4")
+                    .arg(t, 0, 'f', 6)
+                    .arg(vStr)
+                    .arg(iStr)
+                    .arg(oStr));
+            }
+        }
+
+        // 更新图表曲线（保持原逻辑）
         int xr = Edit_XRange->text().toInt();
         if (xr <= 0) xr = 100;
         if (xr > 50000) xr = 50000;
@@ -443,7 +496,7 @@ void SerialPortAssistant::processBufferOptimized() {
         pos += frameLen;
     }
 
-    // 动态轴范围
+    // 动态更新所有轴范围
     double xMin = Edit_XMin->text().toDouble();
     double xMax = Edit_XMax->text().toDouble();
     if (xMin < xMax) axisX->setRange(xMin, xMax);
@@ -484,7 +537,6 @@ void SerialPortAssistant::processBufferOptimized() {
     }
 }
 
-// ---------- 串口开关 ----------
 void SerialPortAssistant::togglePort(bool open) {
     if (open) {
         serialPort->setPortName(SerialPort_Number->currentText());
@@ -500,6 +552,7 @@ void SerialPortAssistant::togglePort(bool open) {
             if (CheckBox_SaveCSV->isChecked()) {
                 startCSVLogging();
             }
+            SerialPort_Number->setEnabled(false);   // 禁用端口选择
             SerialPort_Connect->setEnabled(false);
             SerialPort_Disonnect->setEnabled(true);
         }
@@ -513,23 +566,22 @@ void SerialPortAssistant::togglePort(bool open) {
             buffer.clear();
         }
         serialPort->close();
+        SerialPort_Number->setEnabled(true);        // 恢复端口选择
         stopCSVLogging();
         SerialPort_Connect->setEnabled(true);
         SerialPort_Disonnect->setEnabled(false);
     }
 }
 
-// ---------- 重置图表 ----------
 void SerialPortAssistant::clearAllData() {
     for (auto s : seriesList) s->clear();
     baseSamplingRate = 0;
     globalSamplePairCount = 0;
     globalOpticalSampleCount = 0;
-    if (m_isSaving) m_csvMap.clear();
+    // CSV 记录状态不重置，继续写入当前文件（若在记录）
     SerialPort_ReceiveAear->appendPlainText(QString::fromUtf8("[System] Chart reset"));
 }
 
-// ---------- 更新端口列表 ----------
 void SerialPortAssistant::updatePortList() {
     QList<QSerialPortInfo> infos = QSerialPortInfo::availablePorts();
     if (infos.size() != lastPortList.size()) {
@@ -540,9 +592,10 @@ void SerialPortAssistant::updatePortList() {
     }
 }
 
-// ---------- CSV 功能（统一时间轴） ----------
+// ************************** CSV 功能实现 **************************
 void SerialPortAssistant::startCSVLogging() {
-    if (m_isSaving) return;
+    if (m_isSaving) return; // 已在记录
+
     QString fileName = QDateTime::currentDateTime().toString("yyyyMMddHHmmss") + ".csv";
     m_csvFile = new QFile(fileName);
     if (!m_csvFile->open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -552,17 +605,20 @@ void SerialPortAssistant::startCSVLogging() {
         return;
     }
     m_csvStream = new QTextStream(m_csvFile);
+    // 写入表头
     *m_csvStream << "Time(s),Voltage(V),Current(A),OpticalSignal\n";
-    m_csvMap.clear();
     m_isSaving = true;
-    m_csvFlushTimer->start(1000);
+    m_csvFlushTimer->start(1000);  // 每秒写入一次
     SerialPort_ReceiveAear->appendPlainText("[CSV] Started logging to " + fileName);
 }
 
 void SerialPortAssistant::stopCSVLogging() {
     if (!m_isSaving) return;
+
+    // 刷新缓冲区中剩余数据
     flushCSVBuffer();
     m_csvFlushTimer->stop();
+
     if (m_csvStream) {
         m_csvStream->flush();
         delete m_csvStream;
@@ -574,29 +630,33 @@ void SerialPortAssistant::stopCSVLogging() {
         m_csvFile = nullptr;
     }
     m_isSaving = false;
-    m_csvMap.clear();
+    m_csvBuffer.clear();
     SerialPort_ReceiveAear->appendPlainText("[CSV] Stopped logging.");
 }
 
 void SerialPortAssistant::flushCSVBuffer() {
-    if (!m_isSaving || m_csvMap.isEmpty() || !m_csvStream) return;
+    if (!m_isSaving || m_csvBuffer.isEmpty() || !m_csvStream) return;
 
-    for (auto it = m_csvMap.constBegin(); it != m_csvMap.constEnd(); ++it) {
-        double timeSec = it.key() / 1e6;
-        const CsvRow& row = it.value();
-        *m_csvStream << QString::number(timeSec, 'f', 6) << ","
-            << (std::isnan(row.voltage) ? "" : QString::number(row.voltage, 'f', 6)) << ","
-            << (std::isnan(row.current) ? "" : QString::number(row.current, 'f', 6)) << ","
-            << (std::isnan(row.optical) ? "" : QString::number(row.optical, 'f', 6)) << "\n";
+    for (const QString& line : qAsConst(m_csvBuffer)) {
+        *m_csvStream << line << "\n";
     }
-    m_csvMap.clear();
+    m_csvBuffer.clear();
 }
 
 void SerialPortAssistant::onSaveCSVToggled(bool checked) {
+    // 只有在串口已打开时才动态启停记录
     if (!serialPort->isOpen()) return;
-    if (checked) startCSVLogging();
-    else stopCSVLogging();
+
+    if (checked) {
+        startCSVLogging();
+    }
+    else {
+        stopCSVLogging();
+    }
 }
 
 void SerialPortAssistant::timerEvent(QTimerEvent*) { updatePortList(); }
-SerialPortAssistant::~SerialPortAssistant() { stopCSVLogging(); }
+
+SerialPortAssistant::~SerialPortAssistant() {
+    stopCSVLogging();
+}
