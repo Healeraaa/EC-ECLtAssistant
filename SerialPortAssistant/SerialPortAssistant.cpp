@@ -88,18 +88,18 @@ void SerialPortAssistant::initUI() {
     Combo_Configs[0]->addItem("Channel3", 1);
     Combo_Configs[0]->addItem("Channel4", 0);
 
-    Combo_Configs[1]->addItem("Gain1K", 0);
-    Combo_Configs[1]->addItem("Gain100K", 1);
-    Combo_Configs[1]->addItem("Gain1M", 2);
-    Combo_Configs[1]->addItem("Gain100M", 3);
+    Combo_Configs[1]->addItem("Gain33", 0);
+    Combo_Configs[1]->addItem("Gain1K", 1);
+    Combo_Configs[1]->addItem("Gain10K", 2);
+    Combo_Configs[1]->addItem("Gain100K", 3);
 
-    Combo_Configs[2]->addItem("Gain5X", 0);
-    Combo_Configs[2]->addItem("Gain20X", 1);
+    Combo_Configs[2]->addItem("Gain1X", 0);
+    Combo_Configs[2]->addItem("Gain10X", 1);
 
     Combo_Configs[3]->addItem("Gain1X", 0);
-    Combo_Configs[3]->addItem("Gain5X", 1);
-    Combo_Configs[3]->addItem("Gain20X", 2);
-    Combo_Configs[3]->addItem("Gain50X", 3);
+    Combo_Configs[3]->addItem("Gain3.3X", 1);
+    Combo_Configs[3]->addItem("Gain10X", 2);
+    Combo_Configs[3]->addItem("Gain33X", 3);
 
     grid->addWidget(new QLabel(QString::fromUtf8("--- 参数设置 ---")), row++, 0, 1, 2);
     for (int i = 0; i < 6; ++i) {
