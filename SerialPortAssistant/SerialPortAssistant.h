@@ -60,6 +60,7 @@ private:
     QComboBox* SerialPort_Number, * SerialPort_BaudRate, * Combo_Mode;
 
     QComboBox* Combo_Configs[4];
+    QComboBox* Combo_Range;  // 新的范围选择下拉框，替代 Combo_Configs[1], [2], [3]
 
     QCheckBox* CheckBox_SaveCSV, * CheckBox_EnablePlot;
     QLineEdit* Edit_XRange;

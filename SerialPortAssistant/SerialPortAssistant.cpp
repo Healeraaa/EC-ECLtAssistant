@@ -71,35 +71,64 @@ void SerialPortAssistant::initUI() {
     grid->addWidget(new QLabel(QString::fromUtf8("--- 硬件配置 ---")), row++, 0, 1, 2);
 
     Combo_Mode = new QComboBox();
-    Combo_Mode->addItems({ QString::fromUtf8("CV (循环伏安)"), QString::fromUtf8("DPV (差分脉冲)") });
+    Combo_Mode->addItems({ QString::fromUtf8("CV (循环伏安)"), QString::fromUtf8("DPV (差分脉冲)"), QString::fromUtf8("CA (计时电流)") });
     grid->addWidget(new QLabel(QString::fromUtf8("测试模式:")), row, 0);
     grid->addWidget(Combo_Mode, row++, 1);
 
-    QStringList configLabels = { QString::fromUtf8("通道:"), QString::fromUtf8("IV增益:"),
-                                 QString::fromUtf8("电压增益1:"), QString::fromUtf8("电压增益2:") };
-    for (int i = 0; i < 4; ++i) {
-        Combo_Configs[i] = new QComboBox();
-        grid->addWidget(new QLabel(configLabels[i]), row, 0);
-        grid->addWidget(Combo_Configs[i], row++, 1);
-    }
+    // 通道选择
+    Combo_Configs[0] = new QComboBox();
+    grid->addWidget(new QLabel(QString::fromUtf8("通道:")), row, 0);
+    grid->addWidget(Combo_Configs[0], row++, 1);
 
     Combo_Configs[0]->addItem("Channel1", 2);
     Combo_Configs[0]->addItem("Channel2", 3);
     Combo_Configs[0]->addItem("Channel3", 1);
     Combo_Configs[0]->addItem("Channel4", 0);
 
+    // 🔥 新的范围选择下拉框，替代原有的 IV增益、电压增益1、电压增益2
+    Combo_Range = new QComboBox();
+    Combo_Range->addItem("100 nA");
+    Combo_Range->addItem("330 nA");
+    Combo_Range->addItem("1 uA");
+    Combo_Range->addItem("3.3 uA");
+    Combo_Range->addItem("10 uA");
+    Combo_Range->addItem("33 uA");
+    Combo_Range->addItem("100 uA");
+    Combo_Range->addItem("330 uA");
+    Combo_Range->addItem("1 mA");
+    Combo_Range->addItem("3.3 mA");
+    Combo_Range->addItem("10 mA");
+    Combo_Range->addItem("30.3 mA");
+    Combo_Range->addItem("100 mA");
+    grid->addWidget(new QLabel(QString::fromUtf8("测量范围:")), row, 0);
+    grid->addWidget(Combo_Range, row++, 1);
+    
+    // 保留原有的 Combo_Configs[1], [2], [3] 但隐藏，用于内部存储
+    for (int i = 1; i < 4; ++i) {
+        Combo_Configs[i] = new QComboBox();
+        Combo_Configs[i]->setVisible(false);
+    }
+    
+    // 初始化 IV增益选项
     Combo_Configs[1]->addItem("Gain33", 0);
     Combo_Configs[1]->addItem("Gain1K", 1);
     Combo_Configs[1]->addItem("Gain10K", 2);
     Combo_Configs[1]->addItem("Gain100K", 3);
 
+    // 初始化 电压增益1 选项
     Combo_Configs[2]->addItem("Gain1X", 0);
     Combo_Configs[2]->addItem("Gain10X", 1);
 
+    // 初始化 电压增益2 选项
     Combo_Configs[3]->addItem("Gain1X", 0);
     Combo_Configs[3]->addItem("Gain3.3X", 1);
     Combo_Configs[3]->addItem("Gain10X", 2);
     Combo_Configs[3]->addItem("Gain33X", 3);
+    
+    // 设置初始值
+    Combo_Configs[1]->setCurrentIndex(3);  // Gain100K
+    Combo_Configs[2]->setCurrentIndex(1);  // Gain10X
+    Combo_Configs[3]->setCurrentIndex(3);  // Gain33X
 
     grid->addWidget(new QLabel(QString::fromUtf8("--- 参数设置 ---")), row++, 0, 1, 2);
     for (int i = 0; i < 6; ++i) {
@@ -186,7 +215,7 @@ void SerialPortAssistant::initUI() {
 void SerialPortAssistant::updateChemLabels(int index) {
     QStringList labels;
     if (index == 0) {
-        labels << "初始电位(mV)" << "终止电位(mV)" << "扫描极限1(mV)" << "扫描极限2(mV)" << "扫描速率(mV/s)" << "循环次数";
+        labels << QString::fromUtf8("初始电位(mV)") << QString::fromUtf8("终止电位(mV)") << QString::fromUtf8("扫描极限1(mV)") << QString::fromUtf8("扫描极限2(mV)") << QString::fromUtf8("扫描速率(mV/s)") << QString::fromUtf8("循环次数");
         Spin_Floats[0]->setRange(-5000.0, 5000.0);
         Spin_Floats[1]->setRange(-5000.0, 5000.0);
         Spin_Floats[2]->setRange(-5000.0, 5000.0);
@@ -200,8 +229,8 @@ void SerialPortAssistant::updateChemLabels(int index) {
         Spin_Floats[4]->setValue(30.0);
         Spin_Floats[5]->setValue(3.0);
     }
-    else {
-        labels << "初始电位(mV)" << "终止电位(mV)" << "步进电位(mV)" << "脉冲幅度(mV)" << "脉冲宽度(ms)" << "脉冲周期(ms)";
+    else if (index == 1) {
+        labels << QString::fromUtf8("初始电位(mV)") << QString::fromUtf8("终止电位(mV)") << QString::fromUtf8("步进电位(mV)") << QString::fromUtf8("脉冲幅度(mV)") << QString::fromUtf8("脉冲宽度(ms)") << QString::fromUtf8("脉冲周期(ms)");
         Spin_Floats[0]->setRange(-5000.0, 5000.0);
         Spin_Floats[1]->setRange(-5000.0, 5000.0);
         Spin_Floats[2]->setRange(1.0, 1000.0);
@@ -214,6 +243,21 @@ void SerialPortAssistant::updateChemLabels(int index) {
         Spin_Floats[3]->setValue(Spin_Floats[3]->minimum());
         Spin_Floats[4]->setValue(Spin_Floats[4]->minimum());
         Spin_Floats[5]->setValue(Spin_Floats[5]->minimum());
+    }
+    else if (index == 2) {
+        labels << QString::fromUtf8("初始电位(mV)") << QString::fromUtf8("初始电位时间(s)") << QString::fromUtf8("阶跃1电位(mV)") << QString::fromUtf8("阶跃1时间(s)") << QString::fromUtf8("阶跃2电位(mV)") << QString::fromUtf8("阶跃2时间(s)");
+        Spin_Floats[0]->setRange(-5000.0, 5000.0);
+        Spin_Floats[1]->setRange(0.0, 1000.0);
+        Spin_Floats[2]->setRange(-5000.0, 5000.0);
+        Spin_Floats[3]->setRange(0.0, 10000.0);
+        Spin_Floats[4]->setRange(-5000.0, 5000.0);
+        Spin_Floats[5]->setRange(0.0, 10000.0);
+        Spin_Floats[0]->setValue(0.0);
+        Spin_Floats[1]->setValue(3.0);
+        Spin_Floats[2]->setValue(1000.0);
+        Spin_Floats[3]->setValue(1.0);
+        Spin_Floats[4]->setValue(0.0);
+        Spin_Floats[5]->setValue(3.0);
     }
     for (int i = 0; i < 6; ++i) {
         Label_Floats[i]->setText(labels[i]);
@@ -236,6 +280,46 @@ void SerialPortAssistant::setupConnections() {
 void SerialPortAssistant::sendConfig() {
     if (!serialPort->isOpen()) return;
 
+    // 🔥 根据 Combo_Range 选择，自动设置对应的 IV增益、电压增益1、电压增益2
+    int rangeIdx = Combo_Range->currentIndex();
+    
+    // 映射表：每个范围对应 [IV增益索引, 电压增益1索引, 电压增益2索引]
+    const int rangeMapping[13][3] = {
+        // 100 nA
+        {3, 1, 3},  // Gain100K, Gain10X, Gain33X
+        // 330 nA
+        {3, 1, 2},  // Gain100K, Gain10X, Gain10X
+        // 1 uA
+        {3, 1, 1},  // Gain100K, Gain10X, Gain3.3X
+        // 3.3 uA
+        {3, 0, 2},  // Gain100K, Gain1X, Gain10X
+        // 10 uA
+        {3, 0, 1},  // Gain100K, Gain1X, Gain3.3X
+        // 33 uA
+        {3, 0, 0},  // Gain100K, Gain1X, Gain1X
+        // 100 uA
+        {2, 1, 1},  // Gain10K, Gain10X, Gain3.3X
+        // 330 uA
+        {2, 0, 0},  // Gain10K, Gain1X, Gain1X
+        // 1 mA
+        {1, 0, 1},  // Gain1K, Gain1X, Gain3.3X
+        // 3.3 mA
+        {1, 0, 0},  // Gain1K, Gain1X, Gain1X
+        // 10 mA
+        {0, 0, 2},  // Gain33, Gain1X, Gain10X
+        // 30.3 mA
+        {0, 0, 1},  // Gain33, Gain1X, Gain3.3X
+        // 100 mA
+        {0, 0, 0}   // Gain33, Gain1X, Gain1X
+    };
+    
+    // 设置对应的值
+    if (rangeIdx >= 0 && rangeIdx < 13) {
+        Combo_Configs[1]->setCurrentIndex(rangeMapping[rangeIdx][0]);
+        Combo_Configs[2]->setCurrentIndex(rangeMapping[rangeIdx][1]);
+        Combo_Configs[3]->setCurrentIndex(rangeMapping[rangeIdx][2]);
+    }
+
     QString dLine = QString("ceiod:%1,%2,%3,%4,%5\n")
         .arg(Combo_Mode->currentIndex())
         .arg(Combo_Configs[0]->currentData().toInt())
@@ -252,7 +336,11 @@ void SerialPortAssistant::sendConfig() {
 
     QByteArray packet = (dLine + fLine).toLocal8Bit();
     serialPort->write(packet);
-    SerialPort_ReceiveAear->appendPlainText(QString::fromUtf8("[发送配置] -> ") + dLine.trimmed() + " | " + fLine.trimmed());
+    SerialPort_ReceiveAear->appendPlainText(QString::fromUtf8("[Send Config] Mode=") + QString::number(Combo_Mode->currentIndex()) 
+        + QString::fromUtf8(" Range=") + Combo_Range->currentText() 
+        + QString::fromUtf8(" (IV:") + Combo_Configs[1]->currentText()
+        + QString::fromUtf8(" V1:") + Combo_Configs[2]->currentText()
+        + QString::fromUtf8(" V2:") + Combo_Configs[3]->currentText() + ")");
 }
 
 uint16_t SerialPortAssistant::calculateCRC16(const QByteArray& data) {
