@@ -1,11 +1,58 @@
 #include "SerialPortAssistant.h"
+#include <QDialog>
+#include <QFrame>
+#include <QSplitter>
+#include <QGroupBox>
 #include <QMessageBox>
 #include <QTimerEvent>
 #include <cmath>
 
+// ===== Sci-Fi Dark Theme =====
+static void applyTheme(QWidget* w) {
+    w->setStyleSheet(QStringLiteral(
+        "QMainWindow, QWidget { background-color: #0a0e17; color: #e2e8f0; }"
+        "QGroupBox { border: 1px solid #1e293b; border-radius: 8px; margin-top: 14px;"
+        "  padding-top: 14px; color: #00e5ff; font-weight: bold; font-size: 11px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; }"
+        "QLabel { color: #94a3b8; background: transparent; font-size: 12px; }"
+        "QLabel#sectionLabel { color: #475569; font-size: 10px; font-weight: bold; letter-spacing: 2px; }"
+        "QComboBox { background: #0f172a; border: 1px solid #334155; border-radius: 4px;"
+        "  padding: 4px 8px; color: #e2e8f0; min-height: 24px; }"
+        "QComboBox:hover { border-color: #00e5ff; }"
+        "QComboBox::drop-down { border: none; width: 20px; }"
+        "QComboBox QAbstractItemView { background: #111827; border: 1px solid #334155;"
+        "  color: #e2e8f0; selection-background-color: #1e3a5f; }"
+        "QDoubleSpinBox, QLineEdit { background: #0f172a; border: 1px solid #334155;"
+        "  border-radius: 4px; padding: 4px 8px; color: #e2e8f0; min-height: 24px; }"
+        "QDoubleSpinBox:hover, QLineEdit:hover { border-color: #00e5ff; }"
+        "QDoubleSpinBox:focus, QLineEdit:focus { border-color: #00e5ff; }"
+        "QCheckBox { color: #94a3b8; spacing: 8px; }"
+        "QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #334155;"
+        "  border-radius: 3px; background: #0f172a; }"
+        "QCheckBox::indicator:checked { background: #00e5ff; border-color: #00e5ff; }"
+        "QPushButton { background: #1e293b; border: 1px solid #334155; border-radius: 4px;"
+        "  padding: 5px 14px; color: #e2e8f0; font-size: 12px; font-weight: bold; min-height: 24px; }"
+        "QPushButton:hover { border-color: #00e5ff; color: #00e5ff; }"
+        "QPushButton:pressed { background: #0f172a; }"
+        "QPushButton#btnConnect { background: #0088cc; border: none; color: white; }"
+        "QPushButton#btnConnect:hover { background: #00a8e8; }"
+        "QPushButton#btnResult { background: #7c3aed; border: none; color: white; }"
+        "QPushButton#btnResult:hover { background: #8b5cf6; }"
+        "QPushButton#btnSend { background: transparent; border: 1px solid #00e5ff; color: #00e5ff; }"
+        "QPushButton#btnSend:hover { background: #00e5ff; color: #0a0e17; }"
+        "QPlainTextEdit#debugConsole { background: #000000; border: 1px solid #1e293b;"
+        "  border-radius: 4px; color: #00ff88; font-family: Consolas, monospace; font-size: 11px; padding: 8px; }"
+        "QScrollBar:horizontal { height: 6px; background: #0f172a; border: none; }"
+        "QScrollBar::handle:horizontal { background: #334155; border-radius: 3px; min-width: 20px; }"
+        "QScrollBar:vertical { width: 6px; background: #0f172a; border: none; }"
+        "QScrollBar::handle:vertical { background: #334155; border-radius: 3px; min-height: 20px; }"
+        "QScrollBar::add-line, QScrollBar::sub-line { height: 0px; width: 0px; }"
+        "QChartView { background: #0f172a; border: 1px solid #1e293b; border-radius: 4px; }"
+    ));
+}
+
 SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) {
     this->setWindowTitle(QString::fromUtf8("EC-ECL Recorder"));
-    this->setMinimumSize(1280, 900);
     serialPort = new QSerialPort(this);
 
     initUI();
@@ -26,66 +73,124 @@ SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) 
 void SerialPortAssistant::initUI() {
     QWidget* centralWidget = new QWidget(this);
     this->setCentralWidget(centralWidget);
-    QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
-    QVBoxLayout* leftLayout = new QVBoxLayout();
+    QHBoxLayout* centralOuterLayout = new QHBoxLayout(centralWidget);
+    centralOuterLayout->setContentsMargins(12, 12, 12, 12);
 
-    // 1. 接收区与图表 (左侧)
+    QSplitter* splitter = new QSplitter(Qt::Horizontal);
+    splitter->setHandleWidth(3);
+    splitter->setStyleSheet("QSplitter::handle { background: #334155; }"
+                            "QSplitter::handle:hover { background: #00e5ff; }");
+
+    // ===== LEFT PANEL: Debug Console + Chart =====
+    QWidget* leftContainer = new QWidget();
+    QVBoxLayout* leftLayout = new QVBoxLayout(leftContainer);
+    leftLayout->setContentsMargins(0, 0, 0, 0);
+    leftLayout->setSpacing(6);
+
+    QLabel* debugLabel = new QLabel("DEBUG CONSOLE");
+    debugLabel->setObjectName("sectionLabel");
+    leftLayout->addWidget(debugLabel);
+
     SerialPort_ReceiveAear = new QPlainTextEdit();
     SerialPort_ReceiveAear->setReadOnly(true);
-    leftLayout->addWidget(new QLabel(QString::fromUtf8("调试数据:")), 0);
+    SerialPort_ReceiveAear->setMaximumBlockCount(500);
+    SerialPort_ReceiveAear->setObjectName("debugConsole");
     leftLayout->addWidget(SerialPort_ReceiveAear, 2);
 
+    // Chart with dark theme
     QChart* chart = new QChart();
-    // 开启图例
+    chart->setBackgroundBrush(QColor("#0f172a"));
+    chart->setPlotAreaBackgroundBrush(QColor("#0a0e17"));
+    chart->setBackgroundRoundness(0);
     chart->legend()->setVisible(true);
     chart->legend()->setAlignment(Qt::AlignBottom);
+    chart->legend()->setLabelColor(QColor("#e2e8f0"));
+    chart->legend()->setBackgroundVisible(true);
+    chart->legend()->setBrush(QBrush(QColor(0x11, 0x18, 0x27, 220)));
+    chart->legend()->setBorderColor(QColor("#1e293b"));
+    chart->setAnimationOptions(QChart::NoAnimation);
 
     axisX = new QValueAxis(); axisX->setRange(0, 100);
+    axisX->setTitleBrush(QColor("#94a3b8"));
+    axisX->setLabelsColor(QColor("#94a3b8"));
+    axisX->setGridLineColor(QColor("#1e293b"));
+    axisX->setLinePenColor(QColor("#334155"));
+    axisX->setShadesPen(Qt::NoPen);
+
     axisY = new QValueAxis(); axisY->setRange(-2, 2);
+    axisY->setTitleBrush(QColor("#94a3b8"));
+    axisY->setLabelsColor(QColor("#94a3b8"));
+    axisY->setGridLineColor(QColor("#1e293b"));
+    axisY->setLinePenColor(QColor("#334155"));
+
     axisYRight = new QValueAxis();
     axisYRight->setRange(-2, 2);
+    axisYRight->setTitleBrush(QColor("#94a3b8"));
+    axisYRight->setLabelsColor(QColor("#94a3b8"));
+    axisYRight->setGridLineColor(QColor("#1e293b"));
+    axisYRight->setLinePenColor(QColor("#334155"));
+
     chart->addAxis(axisX, Qt::AlignBottom);
     chart->addAxis(axisY, Qt::AlignLeft);
     chart->addAxis(axisYRight, Qt::AlignRight);
+
     chartView = new QChartView(chart);
+    chartView->setRenderHint(QPainter::Antialiasing);
+    chartView->setObjectName("chartView");
+
+    QLabel* chartLabel = new QLabel("WAVEFORM");
+    chartLabel->setObjectName("sectionLabel");
+    leftLayout->addWidget(chartLabel);
     leftLayout->addWidget(chartView, 5);
 
     ScrollBar_X = new QScrollBar(Qt::Horizontal);
     ScrollBar_X->setVisible(false);
     leftLayout->addWidget(ScrollBar_X);
 
-    // 2. 参数配置区 (右侧)
-    QVBoxLayout* rightLayout = new QVBoxLayout();
+    // ===== RIGHT PANEL: Config Cards (scrollable) =====
+    QScrollArea* rightScroll = new QScrollArea();
+    rightScroll->setWidgetResizable(true);
+    rightScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    rightScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    rightScroll->setFrameShape(QFrame::NoFrame);
     QWidget* configWidget = new QWidget();
-    configWidget->setFixedWidth(350);
-    QGridLayout* grid = new QGridLayout(configWidget);
+    configWidget->setMinimumWidth(320);
+    QVBoxLayout* configLayout = new QVBoxLayout(configWidget);
+    configLayout->setContentsMargins(0, 0, 0, 0);
+    configLayout->setSpacing(8);
+
+    // ---- Hardware Card ----
+    QGroupBox* hwCard = new QGroupBox("HARDWARE");
+    QGridLayout* hwGrid = new QGridLayout(hwCard);
+    hwGrid->setSpacing(6);
+    hwGrid->setColumnStretch(0, 0);
+    hwGrid->setColumnStretch(1, 1);
+    hwGrid->setColumnStretch(2, 0);
+    hwGrid->setColumnStretch(3, 1);
 
     int row = 0;
     SerialPort_Number = new QComboBox();
     SerialPort_BaudRate = new QComboBox();
     SerialPort_BaudRate->addItems({ "115200", "921600", "2000000", "3000000","600000" });
     SerialPort_BaudRate->setCurrentText("600000");
-    grid->addWidget(new QLabel(QString::fromUtf8("端口:")), row, 0);
-    grid->addWidget(SerialPort_Number, row++, 1);
-
-    grid->addWidget(new QLabel(QString::fromUtf8("--- 硬件配置 ---")), row++, 0, 1, 2);
+    hwGrid->addWidget(new QLabel("Port:"), row, 0);
+    hwGrid->addWidget(SerialPort_Number, row, 1);
+    hwGrid->addWidget(new QLabel("Baud:"), row, 2);
+    hwGrid->addWidget(SerialPort_BaudRate, row++, 3);
 
     Combo_Mode = new QComboBox();
-    Combo_Mode->addItems({ QString::fromUtf8("CV (循环伏安)"), QString::fromUtf8("DPV (差分脉冲)"), QString::fromUtf8("CA (计时电流)") });
-    grid->addWidget(new QLabel(QString::fromUtf8("测试模式:")), row, 0);
-    grid->addWidget(Combo_Mode, row++, 1);
+    Combo_Mode->addItems({ QString::fromUtf8("CV (循环伏安)"), QString::fromUtf8("DPV (差分脉冲)"), QString::fromUtf8("CA (计时电流)"), QString::fromUtf8("GPCI") });
+    hwGrid->addWidget(new QLabel("Mode:"), row, 0);
+    hwGrid->addWidget(Combo_Mode, row++, 1, 1, 3);
 
-    // 通道选择
     Combo_Configs[0] = new QComboBox();
-    grid->addWidget(new QLabel(QString::fromUtf8("通道:")), row, 0);
-    grid->addWidget(Combo_Configs[0], row++, 1);
+    Combo_Configs[0]->addItem("Channel 1", 2);
+    Combo_Configs[0]->addItem("Channel 2", 3);
+    Combo_Configs[0]->addItem("Channel 3", 1);
+    Combo_Configs[0]->addItem("Channel 4", 0);
+    hwGrid->addWidget(new QLabel("Channel:"), row, 0);
+    hwGrid->addWidget(Combo_Configs[0], row++, 1, 1, 3);
 
-    Combo_Configs[0]->addItem("Channel1", 2);
-    Combo_Configs[0]->addItem("Channel2", 3);
-    Combo_Configs[0]->addItem("Channel3", 1);
-    Combo_Configs[0]->addItem("Channel4", 0);
-
-    // 🔥 新的范围选择下拉框，替代原有的 IV增益、电压增益1、电压增益2
     Combo_Range = new QComboBox();
     Combo_Range->addItem("100 nA");
     Combo_Range->addItem("330 nA");
@@ -100,97 +205,124 @@ void SerialPortAssistant::initUI() {
     Combo_Range->addItem("10 mA");
     Combo_Range->addItem("30.3 mA");
     Combo_Range->addItem("100 mA");
-    grid->addWidget(new QLabel(QString::fromUtf8("测量范围:")), row, 0);
-    grid->addWidget(Combo_Range, row++, 1);
-    
-    // 保留原有的 Combo_Configs[1], [2], [3] 但隐藏，用于内部存储
+    hwGrid->addWidget(new QLabel("Range:"), row, 0);
+    hwGrid->addWidget(Combo_Range, row++, 1, 1, 3);
+
+    configLayout->addWidget(hwCard);
+
+    // Hidden internal combos
     for (int i = 1; i < 4; ++i) {
         Combo_Configs[i] = new QComboBox();
         Combo_Configs[i]->setVisible(false);
     }
-    
-    // 初始化 IV增益选项
     Combo_Configs[1]->addItem("Gain33", 0);
     Combo_Configs[1]->addItem("Gain1K", 1);
     Combo_Configs[1]->addItem("Gain10K", 2);
     Combo_Configs[1]->addItem("Gain100K", 3);
-
-    // 初始化 电压增益1 选项
     Combo_Configs[2]->addItem("Gain1X", 0);
     Combo_Configs[2]->addItem("Gain10X", 1);
-
-    // 初始化 电压增益2 选项
     Combo_Configs[3]->addItem("Gain1X", 0);
     Combo_Configs[3]->addItem("Gain3.3X", 1);
     Combo_Configs[3]->addItem("Gain10X", 2);
     Combo_Configs[3]->addItem("Gain33X", 3);
-    
-    // 设置初始值
-    Combo_Configs[1]->setCurrentIndex(3);  // Gain100K
-    Combo_Configs[2]->setCurrentIndex(1);  // Gain10X
-    Combo_Configs[3]->setCurrentIndex(3);  // Gain33X
+    Combo_Configs[1]->setCurrentIndex(3);
+    Combo_Configs[2]->setCurrentIndex(1);
+    Combo_Configs[3]->setCurrentIndex(3);
 
-    grid->addWidget(new QLabel(QString::fromUtf8("--- 参数设置 ---")), row++, 0, 1, 2);
+    // ---- Parameters Card ----
+    QGroupBox* paramCard = new QGroupBox("PARAMETERS");
+    QGridLayout* paramGrid = new QGridLayout(paramCard);
+    paramGrid->setSpacing(6);
+    paramGrid->setColumnStretch(0, 0);
+    paramGrid->setColumnStretch(1, 1);
+
     for (int i = 0; i < 6; ++i) {
         Label_Floats[i] = new QLabel();
         Spin_Floats[i] = new QDoubleSpinBox();
         Spin_Floats[i]->setRange(-10.0, 10.0);
         Spin_Floats[i]->setDecimals(4);
-        grid->addWidget(Label_Floats[i], row, 0);
-        grid->addWidget(Spin_Floats[i], row++, 1);
+        paramGrid->addWidget(Label_Floats[i], i, 0);
+        paramGrid->addWidget(Spin_Floats[i], i, 1);
     }
 
     Edit_XRange = new QLineEdit("50000");
-    grid->addWidget(new QLabel(QString::fromUtf8("波形显示范围:")), row, 0);
-    grid->addWidget(Edit_XRange, row++, 1);
+    paramGrid->addWidget(new QLabel("Display Points:"), 6, 0);
+    paramGrid->addWidget(Edit_XRange, 6, 1);
+
+    configLayout->addWidget(paramCard);
+
+    // ---- Axis Range Card ----
+    QGroupBox* axisCard = new QGroupBox("AXIS RANGE");
+    QGridLayout* axisGrid = new QGridLayout(axisCard);
+    axisGrid->setSpacing(4);
+    axisGrid->setColumnStretch(0, 0);
+    axisGrid->setColumnStretch(1, 1);
+    axisGrid->setColumnStretch(2, 0);
+    axisGrid->setColumnStretch(3, 1);
 
     Edit_XMin = new QLineEdit("0");
     Edit_XMax = new QLineEdit("100");
-    grid->addWidget(new QLabel(QString::fromUtf8("X Min Range:")), row, 0);
-    grid->addWidget(Edit_XMin, row++, 1);
-    grid->addWidget(new QLabel(QString::fromUtf8("X Max Range:")), row, 0);
-    grid->addWidget(Edit_XMax, row++, 1);
+    axisGrid->addWidget(new QLabel("X Min:"), 0, 0);
+    axisGrid->addWidget(Edit_XMin, 0, 1);
+    axisGrid->addWidget(new QLabel("X Max:"), 0, 2);
+    axisGrid->addWidget(Edit_XMax, 0, 3);
 
     Edit_YMin = new QLineEdit("-2");
     Edit_YMax = new QLineEdit("2");
-    grid->addWidget(new QLabel(QString::fromUtf8("Y-Left Min:")), row, 0);
-    grid->addWidget(Edit_YMin, row++, 1);
-    grid->addWidget(new QLabel(QString::fromUtf8("Y-Left Max:")), row, 0);
-    grid->addWidget(Edit_YMax, row++, 1);
+    axisGrid->addWidget(new QLabel("Y1 Min:"), 1, 0);
+    axisGrid->addWidget(Edit_YMin, 1, 1);
+    axisGrid->addWidget(new QLabel("Y1 Max:"), 1, 2);
+    axisGrid->addWidget(Edit_YMax, 1, 3);
 
     Edit_YRightMin = new QLineEdit("-2");
     Edit_YRightMax = new QLineEdit("2");
-    grid->addWidget(new QLabel(QString::fromUtf8("Y-Right Min:")), row, 0);
-    grid->addWidget(Edit_YRightMin, row++, 1);
-    grid->addWidget(new QLabel(QString::fromUtf8("Y-Right Max:")), row, 0);
-    grid->addWidget(Edit_YRightMax, row++, 1);
+    axisGrid->addWidget(new QLabel("Y2 Min:"), 2, 0);
+    axisGrid->addWidget(Edit_YRightMin, 2, 1);
+    axisGrid->addWidget(new QLabel("Y2 Max:"), 2, 2);
+    axisGrid->addWidget(Edit_YRightMax, 2, 3);
 
-    CheckBox_EnablePlot = new QCheckBox(QString::fromUtf8("启用波形"));
+    QPushButton* Btn_ApplyXAxis = new QPushButton("Apply X");
+    QPushButton* Btn_ApplyYAxis = new QPushButton("Apply Y1");
+    QPushButton* Btn_ApplyYRight = new QPushButton("Apply Y2");
+    QHBoxLayout* axisBtnRow = new QHBoxLayout();
+    axisBtnRow->addWidget(Btn_ApplyXAxis);
+    axisBtnRow->addWidget(Btn_ApplyYAxis);
+    axisBtnRow->addWidget(Btn_ApplyYRight);
+    axisGrid->addLayout(axisBtnRow, 3, 0, 1, 4);
+
+    configLayout->addWidget(axisCard);
+
+    // Checkboxes
+    QHBoxLayout* checkRow = new QHBoxLayout();
+    CheckBox_EnablePlot = new QCheckBox("Plot Enabled");
     CheckBox_EnablePlot->setChecked(true);
-    CheckBox_SaveCSV = new QCheckBox(QString::fromUtf8("保存CSV"));
+    CheckBox_SaveCSV = new QCheckBox("Save CSV");
     CheckBox_SaveCSV->setChecked(true);
-    grid->addWidget(CheckBox_EnablePlot, row++, 0);
-    grid->addWidget(CheckBox_SaveCSV, row++, 0);
+    checkRow->addWidget(CheckBox_EnablePlot);
+    checkRow->addWidget(CheckBox_SaveCSV);
+    configLayout->addLayout(checkRow);
 
-    rightLayout->addWidget(configWidget);
-    rightLayout->addStretch();
+    // ---- Action Buttons ----
+    SerialPort_Connect = new QPushButton("CONNECT");
+    SerialPort_Connect->setObjectName("btnConnect");
+    SerialPort_Disonnect = new QPushButton("DISCONNECT");
+    SerialPort_Disonnect->setObjectName("btnResult");
+    SerialPort_Send = new QPushButton("SEND CONFIG");
+    SerialPort_Send->setObjectName("btnSend");
+    Btn_ResetPlot = new QPushButton("RESET CHART");
 
-    SerialPort_Connect = new QPushButton(QString::fromUtf8("打开设备"));
-    SerialPort_Disonnect = new QPushButton(QString::fromUtf8("关闭设备"));
-    SerialPort_Send = new QPushButton(QString::fromUtf8("下发配置"));
-    Btn_ResetPlot = new QPushButton(QString::fromUtf8("重置图表"));
-    QPushButton* Btn_ApplyXAxis = new QPushButton("Apply X Range");
-    QPushButton* Btn_ApplyYAxis = new QPushButton("Apply Y Left");
-    QPushButton* Btn_ApplyYRight = new QPushButton("Apply Y Right");
+    configLayout->addWidget(SerialPort_Connect);
+    configLayout->addWidget(SerialPort_Disonnect);
+    configLayout->addWidget(SerialPort_Send);
+    configLayout->addWidget(Btn_ResetPlot);
+    configLayout->addStretch();
 
-    rightLayout->addWidget(SerialPort_Connect);
-    rightLayout->addWidget(SerialPort_Disonnect);
-    rightLayout->addWidget(SerialPort_Send);
-    rightLayout->addWidget(Btn_ResetPlot);
-    rightLayout->addWidget(Btn_ApplyXAxis);
-    rightLayout->addWidget(Btn_ApplyYAxis);
-    rightLayout->addWidget(Btn_ApplyYRight);
+    // 让布局内容的最小尺寸触发滚动条
+    configLayout->setSizeConstraint(QLayout::SetMinimumSize);
 
+    rightScroll->setWidget(configWidget);
+
+    // Button connections for axis apply
     connect(Btn_ApplyXAxis, &QPushButton::clicked, [this]() {
         double xMin = Edit_XMin->text().toDouble();
         double xMax = Edit_XMax->text().toDouble();
@@ -207,8 +339,14 @@ void SerialPortAssistant::initUI() {
         if (yMin < yMax) axisYRight->setRange(yMin, yMax);
         });
 
-    mainLayout->addLayout(leftLayout, 1);
-    mainLayout->addLayout(rightLayout, 0);
+    splitter->addWidget(leftContainer);
+    splitter->addWidget(rightScroll);
+    splitter->setStretchFactor(0, 7);
+    splitter->setStretchFactor(1, 3);
+
+    centralOuterLayout->addWidget(splitter);
+
+    applyTheme(this);
     updateChemLabels(0);
 }
 
@@ -259,6 +397,21 @@ void SerialPortAssistant::updateChemLabels(int index) {
         Spin_Floats[4]->setValue(0.0);
         Spin_Floats[5]->setValue(3.0);
     }
+    else if (index == 3) {
+        labels << "Pre-excitation (mV)" << "Reaction (mV)" << "Recovery (mV)" << "Rest Time (s)" << "Pulse Duration (s)" << "Cycles";
+        Spin_Floats[0]->setRange(-5000.0, 5000.0);
+        Spin_Floats[1]->setRange(-5000.0, 5000.0);
+        Spin_Floats[2]->setRange(-5000.0, 5000.0);
+        Spin_Floats[3]->setRange(0.0, 1000.0);
+        Spin_Floats[4]->setRange(0.0, 1000.0);
+        Spin_Floats[5]->setRange(1.0, 1000.0);
+        Spin_Floats[0]->setValue(0.0);
+        Spin_Floats[1]->setValue(0.0);
+        Spin_Floats[2]->setValue(0.0);
+        Spin_Floats[3]->setValue(0.0);
+        Spin_Floats[4]->setValue(0.0);
+        Spin_Floats[5]->setValue(1.0);
+    }
     for (int i = 0; i < 6; ++i) {
         Label_Floats[i]->setText(labels[i]);
     }
@@ -266,7 +419,11 @@ void SerialPortAssistant::updateChemLabels(int index) {
 
 void SerialPortAssistant::setupConnections() {
     connect(SerialPort_Connect, &QPushButton::clicked, [=]() { togglePort(true); });
-    connect(SerialPort_Disonnect, &QPushButton::clicked, [=]() { togglePort(false); });
+    connect(SerialPort_Disonnect, &QPushButton::clicked, [=]() {
+        if (serialPort->isOpen()) {
+            togglePort(false);
+        }
+    });
     connect(Combo_Mode, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SerialPortAssistant::updateChemLabels);
     connect(SerialPort_Send, &QPushButton::clicked, this, &SerialPortAssistant::sendConfig);
     connect(Btn_ResetPlot, &QPushButton::clicked, this, &SerialPortAssistant::clearAllData);
@@ -432,18 +589,18 @@ void SerialPortAssistant::processBufferOptimized() {
             }
             QPen pen;
             if (seriesList.size() == 0) {
-                pen.setColor(Qt::blue);
+                pen.setColor(QColor("#00e5ff"));
                 s->setName("Voltage");
             }
             else if (seriesList.size() == 1) {
-                pen.setColor(Qt::red);
+                pen.setColor(QColor("#ff6bc1"));
                 s->setName("Current");
             }
             else {
-                pen.setColor(Qt::green);
-                s->setName("Optical");
+                pen.setColor(QColor("#00ff88"));
+                s->setName("ECL");
             }
-            pen.setWidth(2);
+            pen.setWidth(3);
             s->setPen(pen);
             seriesList.append(s);
         }
