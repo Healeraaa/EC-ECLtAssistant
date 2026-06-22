@@ -53,6 +53,7 @@ private:
     void stopCSVLogging();
     void flushCSVBuffer();
     void onSaveCSVToggled(bool checked);
+    void alignCSV(const QString& filePath);
 
     // UI 组件
     QPlainTextEdit* SerialPort_ReceiveAear;

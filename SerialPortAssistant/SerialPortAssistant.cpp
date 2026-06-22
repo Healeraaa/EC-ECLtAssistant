@@ -421,7 +421,14 @@ void SerialPortAssistant::setupConnections() {
     connect(SerialPort_Connect, &QPushButton::clicked, [=]() { togglePort(true); });
     connect(SerialPort_Disonnect, &QPushButton::clicked, [=]() {
         if (serialPort->isOpen()) {
+            QString csvPath;
+            if (m_csvFile) {
+                csvPath = m_csvFile->fileName();
+            }
             togglePort(false);
+            if (!csvPath.isEmpty()) {
+                alignCSV(csvPath);
+            }
         }
     });
     connect(Combo_Mode, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SerialPortAssistant::updateChemLabels);
@@ -865,6 +872,71 @@ void SerialPortAssistant::flushCSVBuffer() {
         *m_csvStream << line << "\n";
     }
     m_csvBuffer.clear();
+}
+
+void SerialPortAssistant::alignCSV(const QString& filePath) {
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        SerialPort_ReceiveAear->appendPlainText("[CSV Align] Cannot open: " + filePath);
+        return;
+    }
+
+    // 读表头 + 所有数据行
+    QTextStream in(&file);
+    QString header = in.readLine();
+    QStringList lines;
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        if (!line.isEmpty()) lines.append(line);
+    }
+    file.close();
+
+    // 按时间戳合并行: map<time, tuple<v,i,o>>
+    QMap<double, std::tuple<double, double, double>> merged;
+    for (const QString& line : lines) {
+        QStringList cols = line.split(',');
+        if (cols.size() < 4) continue;
+
+        bool ok = false;
+        double t = cols[0].toDouble(&ok);
+        if (!ok) continue;
+
+        double v = cols[1].isEmpty() ? qQNaN() : cols[1].toDouble();
+        double i = cols[2].isEmpty() ? qQNaN() : cols[2].toDouble();
+        double o = cols[3].isEmpty() ? qQNaN() : cols[3].toDouble();
+
+        if (!merged.contains(t)) {
+            merged[t] = { qQNaN(), qQNaN(), qQNaN() };
+        }
+        auto& row = merged[t];
+        if (!qIsNaN(v)) std::get<0>(row) = v;
+        if (!qIsNaN(i)) std::get<1>(row) = i;
+        if (!qIsNaN(o)) std::get<2>(row) = o;
+    }
+
+    // 写回对齐后的文件
+    QFile outFile(filePath);
+    if (!outFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        SerialPort_ReceiveAear->appendPlainText("[CSV Align] Cannot write: " + filePath);
+        return;
+    }
+    QTextStream out(&outFile);
+    out << header << "\n";
+
+    for (auto it = merged.begin(); it != merged.end(); ++it) {
+        double v = std::get<0>(it.value());
+        double i = std::get<1>(it.value());
+        double o = std::get<2>(it.value());
+        out << QString::number(it.key(), 'f', 6) << ","
+            << (qIsNaN(v) ? "" : QString::number(v, 'f', 6)) << ","
+            << (qIsNaN(i) ? "" : QString::number(i, 'f', 6)) << ","
+            << (qIsNaN(o) ? "" : QString::number(o, 'f', 6)) << "\n";
+    }
+    outFile.close();
+
+    SerialPort_ReceiveAear->appendPlainText(
+        QString("[CSV Align] Aligned %1 rows -> %2 unique times")
+            .arg(lines.size()).arg(merged.size()));
 }
 
 void SerialPortAssistant::onSaveCSVToggled(bool checked) {
