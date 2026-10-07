@@ -35,6 +35,12 @@ int main()
         return 1;
     }
 
+    const CsvPlaybackLoadResult loadResult = loadCsvPlaybackFile(validPath);
+    if (!loadResult.succeeded || loadResult.data.rows().size() != 3) {
+        std::cerr << "FAILED: worker-friendly load result mismatch\n";
+        return 1;
+    }
+
     const QString invalidPath = temporaryDirectory.filePath("invalid.csv");
     QFile invalidFile(invalidPath);
     if (!invalidFile.open(QIODevice::WriteOnly | QIODevice::Text)) return 1;

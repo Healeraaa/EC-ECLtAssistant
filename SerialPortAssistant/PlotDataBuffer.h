@@ -37,8 +37,10 @@ public:
     void trim(int maximumPointsPerChannel);
 
     const QVector<QPointF>& points(int channel) const;
+    int pointCount(int channel) const;
     const PlotChannelStatistics& statistics(int channel) const;
     bool nearestPoint(int channel, double timeSeconds, QPointF* point) const;
+    QVector<QPointF> decimatedPoints(int channel, int maximumPoints) const;
     PlotDataRange range(const std::array<bool, ChannelCount>& visibleChannels) const;
 
 private:

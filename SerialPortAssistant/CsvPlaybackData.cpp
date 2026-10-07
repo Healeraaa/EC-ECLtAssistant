@@ -27,7 +27,9 @@ bool CsvPlaybackData::load(const QString& filePath, QString* errorMessage)
     }
 
     QVector<CsvPlaybackRow> loadedRows;
-    loadedRows.reserve(10000);
+    const qint64 estimatedRows = file.size() / 32;
+    loadedRows.reserve(static_cast<int>(
+        qBound<qint64>(10000, estimatedRows, kMaximumPlaybackRows)));
     QTextStream stream(&file);
     stream.setCodec("UTF-8");
 
@@ -116,4 +118,11 @@ double CsvPlaybackData::lastTime() const
 double CsvPlaybackData::duration() const
 {
     return m_rows.isEmpty() ? 0.0 : lastTime() - firstTime();
+}
+
+CsvPlaybackLoadResult loadCsvPlaybackFile(const QString& filePath)
+{
+    CsvPlaybackLoadResult result;
+    result.succeeded = result.data.load(filePath, &result.errorMessage);
+    return result;
 }

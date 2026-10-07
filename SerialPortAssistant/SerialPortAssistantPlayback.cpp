@@ -5,6 +5,7 @@
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QSignalBlocker>
+#include <QtConcurrent/QtConcurrentRun>
 #include <algorithm>
 
 void SerialPortAssistant::loadCSVForPlayback()
@@ -26,28 +27,52 @@ void SerialPortAssistant::loadCSVForPlayback()
 
 bool SerialPortAssistant::openCSVForPlayback(const QString& filePath)
 {
-    if (serialPort->isOpen() || filePath.isEmpty()) return false;
+    if (serialPort->isOpen() || filePath.isEmpty() || m_csvLoadWatcher->isRunning()) return false;
 
     stopCSVPlayback();
-    QString errorMessage;
-    if (!m_playbackData.load(filePath, &errorMessage)) {
-        QMessageBox::warning(this, QString::fromUtf8("CSV 加载失败"), errorMessage);
-        return false;
+    m_pendingCsvPath = filePath;
+    Btn_LoadCSV->setEnabled(false);
+    Btn_OpenRecentCSV->setEnabled(false);
+    Btn_PlayPauseCSV->setEnabled(false);
+    Slider_Playback->setEnabled(false);
+    Label_PlaybackFile->setText(
+        QString::fromUtf8("正在后台加载：%1").arg(QFileInfo(filePath).fileName()));
+    m_csvLoadWatcher->setFuture(QtConcurrent::run(loadCsvPlaybackFile, filePath));
+    return true;
+}
+
+void SerialPortAssistant::finishCSVPlaybackLoad()
+{
+    Btn_LoadCSV->setEnabled(!serialPort->isOpen());
+    Btn_OpenRecentCSV->setEnabled(!serialPort->isOpen() && !m_recentCsvFiles.isEmpty());
+    const CsvPlaybackLoadResult result = m_csvLoadWatcher->result();
+    if (!result.succeeded) {
+        Btn_PlayPauseCSV->setEnabled(!serialPort->isOpen() && !m_playbackData.isEmpty());
+        Slider_Playback->setEnabled(!serialPort->isOpen() && !m_playbackData.isEmpty());
+        Label_PlaybackFile->setText(m_playbackData.isEmpty()
+            ? QString::fromUtf8("没有已加载的 CSV")
+            : QString::fromUtf8("保留上一次成功加载的 CSV"));
+        QMessageBox::warning(this, QString::fromUtf8("CSV 加载失败"), result.errorMessage);
+        m_pendingCsvPath.clear();
+        return;
     }
+
+    m_playbackData = result.data;
 
     m_frameParser.clear();
     m_lastStatusFrames = 0;
     Label_PlaybackFile->setText(
         QString("%1 | %2 rows | %3 s")
-            .arg(QFileInfo(filePath).fileName())
+            .arg(QFileInfo(m_pendingCsvPath).fileName())
             .arg(m_playbackData.rows().size())
             .arg(m_playbackData.duration(), 0, 'f', 3));
     Btn_PlayPauseCSV->setEnabled(true);
     Slider_Playback->setEnabled(true);
     seekCSVPlayback(0);
-    addRecentCSVFile(filePath);
-    SerialPort_ReceiveAear->appendPlainText("[Playback] Loaded: " + QDir::toNativeSeparators(filePath));
-    return true;
+    addRecentCSVFile(m_pendingCsvPath);
+    SerialPort_ReceiveAear->appendPlainText(
+        "[Playback] Loaded: " + QDir::toNativeSeparators(m_pendingCsvPath));
+    m_pendingCsvPath.clear();
 }
 
 void SerialPortAssistant::openRecentCSV()
@@ -118,13 +143,6 @@ void SerialPortAssistant::advanceCSVPlayback()
            && rows.at(m_playbackRowIndex).timeSeconds <= m_playbackTimeSeconds) {
         appendPlaybackRow(rows.at(m_playbackRowIndex));
         ++m_playbackRowIndex;
-    }
-
-    if (CheckBox_EnablePlot->isChecked() && !CheckBox_PausePlot->isChecked()) {
-        updatePlotSeries();
-    }
-    else if (CheckBox_EnablePlot->isChecked()) {
-        trimPlotBuffers();
     }
 
     const int sliderValue = rows.isEmpty()

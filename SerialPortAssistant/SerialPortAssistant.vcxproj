@@ -37,12 +37,12 @@
   </ImportGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="QtSettings">
     <QtInstall>5.14.2_msvc2017_64</QtInstall>
-    <QtModules>core;gui;widgets;serialport;charts</QtModules>
+    <QtModules>core;gui;widgets;serialport;charts;concurrent</QtModules>
     <QtBuildConfig>debug</QtBuildConfig>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="QtSettings">
     <QtInstall>5.14.2_msvc2017_64</QtInstall>
-    <QtModules>core;gui;widgets;serialport;charts</QtModules>
+    <QtModules>core;gui;widgets;serialport;charts;concurrent</QtModules>
     <QtBuildConfig>release</QtBuildConfig>
   </PropertyGroup>
   <Target Name="QtMsBuildNotFound" BeforeTargets="CustomBuild;ClCompile" Condition="!Exists('$(QtMsBuild)\qt.targets') or !Exists('$(QtMsBuild)\qt.props')">
@@ -116,8 +116,10 @@
     <ClCompile Include="SerialPortAssistantStatus.cpp" />
     <ClCompile Include="SerialPortAssistantUi.cpp" />
     <ClCompile Include="main.cpp" />
+    <None Include="tests\AsyncCsvLoadTests.cpp" />
     <None Include="tests\CsvPlaybackDataTests.cpp" />
     <None Include="tests\CsvRecorderTests.cpp" />
+    <None Include="tests\DataPipelineStressTests.cpp" />
     <None Include="tests\ExperimentPresetTests.cpp" />
     <None Include="tests\PlotDataBufferTests.cpp" />
     <None Include="tests\ProtocolFrameParserTests.cpp" />

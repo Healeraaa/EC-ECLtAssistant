@@ -46,16 +46,26 @@ void SerialPortAssistant::ensureSeriesCreated()
 
 void SerialPortAssistant::updatePlotSeries()
 {
+    QElapsedTimer renderTimer;
+    renderTimer.start();
     trimPlotBuffers();
+    int renderPointLimit = Edit_RenderPoints->text().toInt();
+    if (renderPointLimit <= 0) renderPointLimit = 4000;
+    renderPointLimit = qBound(200, renderPointLimit, 20000);
+    m_lastRenderedPoints = 0;
     for (int channel = 0; channel < PlotDataBuffer::ChannelCount; ++channel) {
-        if (channel < seriesList.size()) {
-            seriesList[channel]->replace(m_plotBuffer.points(channel));
+        if (channel < seriesList.size() && CheckBox_ChannelVisible[channel]->isChecked()) {
+            const QVector<QPointF> displayPoints =
+                m_plotBuffer.decimatedPoints(channel, renderPointLimit);
+            m_lastRenderedPoints += displayPoints.size();
+            seriesList[channel]->replace(displayPoints);
         }
     }
 
     updateSeriesVisibility();
     if (CheckBox_AutoScale->isChecked()) fitChartToData();
     chartView->chart()->update();
+    m_lastPlotRenderMilliseconds = renderTimer.nsecsElapsed() / 1000000.0;
 }
 
 void SerialPortAssistant::trimPlotBuffers()

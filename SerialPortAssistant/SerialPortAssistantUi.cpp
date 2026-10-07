@@ -204,6 +204,7 @@ void SerialPortAssistant::initUI() {
     Label_FrameStatus = new QLabel("Frames 0 | CRC 0 | Invalid 0");
     Label_SampleStatus = new QLabel("IV 0 | ECL 0");
     Label_PeakStatus = new QLabel("No data");
+    Label_RenderStatus = new QLabel("Plot 0 pts | 0 ms");
     Label_PeakStatus->setWordWrap(true);
     statusGrid->addWidget(new QLabel("State:"), 0, 0);
     statusGrid->addWidget(Label_ConnectionStatus, 0, 1);
@@ -212,6 +213,7 @@ void SerialPortAssistant::initUI() {
     statusGrid->addWidget(Label_FrameStatus, 2, 0, 1, 2);
     statusGrid->addWidget(Label_SampleStatus, 3, 0, 1, 2);
     statusGrid->addWidget(Label_PeakStatus, 4, 0, 1, 2);
+    statusGrid->addWidget(Label_RenderStatus, 5, 0, 1, 2);
     configLayout->addWidget(statusCard);
 
     // Hidden internal combos
@@ -253,6 +255,11 @@ void SerialPortAssistant::initUI() {
     Edit_XRange->setValidator(new QIntValidator(1, 50000, Edit_XRange));
     paramGrid->addWidget(new QLabel("Display Points:"), 6, 0);
     paramGrid->addWidget(Edit_XRange, 6, 1);
+
+    Edit_RenderPoints = new QLineEdit("4000");
+    Edit_RenderPoints->setValidator(new QIntValidator(200, 20000, Edit_RenderPoints));
+    paramGrid->addWidget(new QLabel("Render Points:"), 7, 0);
+    paramGrid->addWidget(Edit_RenderPoints, 7, 1);
 
     configLayout->addWidget(paramCard);
 

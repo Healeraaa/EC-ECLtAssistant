@@ -33,4 +33,13 @@ private:
     QString m_filePath;
 };
 
+struct CsvPlaybackLoadResult
+{
+    bool succeeded = false;
+    CsvPlaybackData data;
+    QString errorMessage;
+};
+
+CsvPlaybackLoadResult loadCsvPlaybackFile(const QString& filePath);
+
 #endif // CSVPLAYBACKDATA_H

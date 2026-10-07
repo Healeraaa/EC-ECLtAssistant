@@ -96,10 +96,16 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="tests\AsyncCsvLoadTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
     <None Include="tests\CsvPlaybackDataTests.cpp">
       <Filter>Test Files</Filter>
     </None>
     <None Include="tests\CsvRecorderTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
+    <None Include="tests\DataPipelineStressTests.cpp">
       <Filter>Test Files</Filter>
     </None>
     <None Include="tests\ExperimentPresetTests.cpp">

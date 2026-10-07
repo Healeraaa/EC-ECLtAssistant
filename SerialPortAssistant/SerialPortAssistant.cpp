@@ -24,6 +24,15 @@ SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) 
     connect(m_processTimer, &QTimer::timeout, this, &SerialPortAssistant::processBinaryBuffer);
     m_processTimer->start(20);
 
+    m_plotRefreshTimer = new QTimer(this);
+    m_plotRefreshTimer->setInterval(100);
+    connect(m_plotRefreshTimer, &QTimer::timeout, [this]() {
+        if (!CheckBox_EnablePlot->isChecked()) return;
+        if (CheckBox_PausePlot->isChecked()) trimPlotBuffers();
+        else updatePlotSeries();
+    });
+    m_plotRefreshTimer->start();
+
     // CSV 缓冲区定时刷新（每秒写一次文件）
     m_csvFlushTimer = new QTimer(this);
     connect(m_csvFlushTimer, &QTimer::timeout, this, &SerialPortAssistant::flushCSVBuffer);
@@ -35,6 +44,13 @@ SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) 
     m_playbackTimer = new QTimer(this);
     m_playbackTimer->setInterval(30);
     connect(m_playbackTimer, &QTimer::timeout, this, &SerialPortAssistant::advanceCSVPlayback);
+
+    m_csvLoadWatcher = new QFutureWatcher<CsvPlaybackLoadResult>(this);
+    connect(
+        m_csvLoadWatcher,
+        &QFutureWatcher<CsvPlaybackLoadResult>::finished,
+        this,
+        &SerialPortAssistant::finishCSVPlaybackLoad);
 
     m_dataRateTimer.start();
     m_plotBuffer.clear();
@@ -178,13 +194,6 @@ void SerialPortAssistant::processBinaryBuffer() {
         processFrame(frame);
     }
 
-    if (CheckBox_EnablePlot->isChecked() && !CheckBox_PausePlot->isChecked()) {
-        updatePlotSeries();
-    }
-    else if (CheckBox_EnablePlot->isChecked()) {
-        trimPlotBuffers();
-    }
-
     const ProtocolParserStats& stats = m_frameParser.stats();
     if (stats.validFrames - m_lastReportedFrames >= 50) {
         m_lastReportedFrames = stats.validFrames;
@@ -237,6 +246,13 @@ void SerialPortAssistant::processFrame(const ProtocolFrame& frame) {
 
 void SerialPortAssistant::togglePort(bool open) {
     if (open) {
+        if (m_csvLoadWatcher->isRunning()) {
+            QMessageBox::information(
+                this,
+                QString::fromUtf8("正在加载 CSV"),
+                QString::fromUtf8("请等待 CSV 加载完成后再连接串口。"));
+            return;
+        }
         stopCSVPlayback();
         serialPort->setPortName(SerialPort_Number->currentText());
         serialPort->setBaudRate(SerialPort_BaudRate->currentText().toInt());
@@ -452,6 +468,7 @@ void SerialPortAssistant::loadSettings() {
     }
 
     Edit_XRange->setText(settings.value("plot/displayPoints", "50000").toString());
+    Edit_RenderPoints->setText(settings.value("plot/renderPoints", "4000").toString());
     Edit_XMin->setText(settings.value("plot/xMin", "0").toString());
     Edit_XMax->setText(settings.value("plot/xMax", "100").toString());
     Edit_YMin->setText(settings.value("plot/yMin", "-2").toString());
@@ -490,6 +507,7 @@ void SerialPortAssistant::saveSettings() {
     settings.setValue("experiment/channel", Combo_Configs[0]->currentIndex());
     settings.setValue("experiment/range", Combo_Range->currentIndex());
     settings.setValue("plot/displayPoints", Edit_XRange->text());
+    settings.setValue("plot/renderPoints", Edit_RenderPoints->text());
     settings.setValue("plot/xMin", Edit_XMin->text());
     settings.setValue("plot/xMax", Edit_XMax->text());
     settings.setValue("plot/yMin", Edit_YMin->text());
@@ -536,6 +554,10 @@ bool SerialPortAssistant::validateConfig(QString* message) const {
 void SerialPortAssistant::timerEvent(QTimerEvent*) { updatePortList(); }
 
 SerialPortAssistant::~SerialPortAssistant() {
+    if (m_csvLoadWatcher->isRunning()) {
+        m_csvLoadWatcher->cancel();
+        m_csvLoadWatcher->waitForFinished();
+    }
     stopCSVLogging();
     saveSettings();
 }

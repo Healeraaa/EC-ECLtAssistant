@@ -22,6 +22,7 @@
 #include <QVector>
 #include <QSlider>
 #include <QElapsedTimer>
+#include <QFutureWatcher>
 #include <array>
 
 #include "ChartInteractionView.h"
@@ -82,6 +83,7 @@ private:
     void loadPreset();
     void loadCSVForPlayback();
     bool openCSVForPlayback(const QString& filePath);
+    void finishCSVPlaybackLoad();
     void openRecentCSV();
     void addRecentCSVFile(const QString& filePath);
     void updateRecentCSVList();
@@ -110,6 +112,7 @@ private:
     QLabel* Label_FrameStatus;
     QLabel* Label_SampleStatus;
     QLabel* Label_PeakStatus;
+    QLabel* Label_RenderStatus;
     QLabel* Label_PlaybackFile;
     QLabel* Label_CursorReadout;
     QLabel* Label_Measurement;
@@ -125,6 +128,7 @@ private:
     QComboBox* Combo_RecentCSV;
     QSlider* Slider_Playback;
     QLineEdit* Edit_XRange;
+    QLineEdit* Edit_RenderPoints;
     QLineEdit* Edit_XMin, * Edit_XMax;
     QLineEdit* Edit_YMin, * Edit_YMax;
     QLineEdit* Edit_YRightMin;
@@ -156,9 +160,12 @@ private:
     CsvRecorder m_csvRecorder;
     QTimer* m_csvFlushTimer;
     QTimer* m_processTimer;
+    QTimer* m_plotRefreshTimer;
     QTimer* m_statusTimer;
 
     CsvPlaybackData m_playbackData;
+    QFutureWatcher<CsvPlaybackLoadResult>* m_csvLoadWatcher;
+    QString m_pendingCsvPath;
     QTimer* m_playbackTimer;
     int m_playbackRowIndex = 0;
     double m_playbackTimeSeconds = 0.0;
@@ -179,6 +186,8 @@ private:
     quint64 m_receivedBytes = 0;
     quint64 m_lastStatusBytes = 0;
     quint64 m_lastStatusFrames = 0;
+    double m_lastPlotRenderMilliseconds = 0.0;
+    int m_lastRenderedPoints = 0;
 
     std::array<std::array<double, 6>, 4> m_modeValues;
     int m_currentMode = -1;

@@ -37,6 +37,23 @@ int main()
         return 1;
     }
 
+    PlotDataBuffer denseBuffer;
+    for (int index = 0; index < 10000; ++index) {
+        const double value = index == 4321 ? 1000.0 : std::sin(index * 0.01);
+        denseBuffer.append(0, index * 0.001, value);
+    }
+    const QVector<QPointF> decimated = denseBuffer.decimatedPoints(0, 500);
+    bool preservedPeak = false;
+    for (const QPointF& point : decimated) {
+        if (point.y() == 1000.0) preservedPeak = true;
+    }
+    if (decimated.size() > 500 || !preservedPeak
+        || decimated.first() != denseBuffer.points(0).first()
+        || decimated.last() != denseBuffer.points(0).last()) {
+        std::cerr << "FAILED: peak-preserving decimation mismatch\n";
+        return 1;
+    }
+
     const std::array<bool, 3> visible{{ true, true, false }};
     const PlotDataRange range = buffer.range(visible);
     if (!range.hasX || !range.hasLeftAxis || range.hasRightAxis
