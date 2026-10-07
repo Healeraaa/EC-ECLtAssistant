@@ -35,12 +35,18 @@
     <QtMoc Include="SerialPortAssistant.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <ClInclude Include="CsvPlaybackData.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="CsvRecorder.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ProtocolFrameParser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClCompile Include="CsvPlaybackData.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="CsvRecorder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -48,6 +54,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SerialPortAssistant.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SerialPortAssistantFeatures.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SerialPortAssistantUi.cpp">
@@ -60,6 +69,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="tests\CsvPlaybackDataTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
     <None Include="tests\CsvRecorderTests.cpp">
       <Filter>Test Files</Filter>
     </None>

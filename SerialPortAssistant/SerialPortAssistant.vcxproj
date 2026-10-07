@@ -97,13 +97,17 @@
     <QtRcc Include="SerialPortAssistant.qrc" />
     <QtUic Include="SerialPortAssistant.ui" />
     <QtMoc Include="SerialPortAssistant.h" />
+    <ClInclude Include="CsvPlaybackData.h" />
     <ClInclude Include="CsvRecorder.h" />
     <ClInclude Include="ProtocolFrameParser.h" />
+    <ClCompile Include="CsvPlaybackData.cpp" />
     <ClCompile Include="CsvRecorder.cpp" />
     <ClCompile Include="ProtocolFrameParser.cpp" />
     <ClCompile Include="SerialPortAssistant.cpp" />
+    <ClCompile Include="SerialPortAssistantFeatures.cpp" />
     <ClCompile Include="SerialPortAssistantUi.cpp" />
     <ClCompile Include="main.cpp" />
+    <None Include="tests\CsvPlaybackDataTests.cpp" />
     <None Include="tests\CsvRecorderTests.cpp" />
     <None Include="tests\ProtocolFrameParserTests.cpp" />
   </ItemGroup>

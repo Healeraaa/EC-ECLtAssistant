@@ -93,6 +93,7 @@ void SerialPortAssistant::initUI() {
     chart->setAnimationOptions(QChart::NoAnimation);
 
     axisX = new QValueAxis(); axisX->setRange(0, 100);
+    axisX->setTitleText("Time (s)");
     axisX->setTitleBrush(QColor("#94a3b8"));
     axisX->setLabelsColor(QColor("#94a3b8"));
     axisX->setGridLineColor(QColor("#1e293b"));
@@ -100,6 +101,7 @@ void SerialPortAssistant::initUI() {
     axisX->setShadesPen(Qt::NoPen);
 
     axisY = new QValueAxis(); axisY->setRange(-2, 2);
+    axisY->setTitleText("Voltage / Current");
     axisY->setTitleBrush(QColor("#94a3b8"));
     axisY->setLabelsColor(QColor("#94a3b8"));
     axisY->setGridLineColor(QColor("#1e293b"));
@@ -107,6 +109,7 @@ void SerialPortAssistant::initUI() {
 
     axisYRight = new QValueAxis();
     axisYRight->setRange(-2, 2);
+    axisYRight->setTitleText("ECL");
     axisYRight->setTitleBrush(QColor("#94a3b8"));
     axisYRight->setLabelsColor(QColor("#94a3b8"));
     axisYRight->setGridLineColor(QColor("#1e293b"));
@@ -119,6 +122,7 @@ void SerialPortAssistant::initUI() {
     chartView = new QChartView(chart);
     chartView->setRenderHint(QPainter::Antialiasing);
     chartView->setObjectName("chartView");
+    chartView->setRubberBand(QChartView::RectangleRubberBand);
 
     QLabel* chartLabel = new QLabel("WAVEFORM");
     chartLabel->setObjectName("sectionLabel");
@@ -136,7 +140,7 @@ void SerialPortAssistant::initUI() {
     rightScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     rightScroll->setFrameShape(QFrame::NoFrame);
     QWidget* configWidget = new QWidget();
-    configWidget->setMinimumWidth(320);
+    configWidget->setMinimumWidth(360);
     QVBoxLayout* configLayout = new QVBoxLayout(configWidget);
     configLayout->setContentsMargins(0, 0, 0, 0);
     configLayout->setSpacing(8);
@@ -192,6 +196,24 @@ void SerialPortAssistant::initUI() {
 
     configLayout->addWidget(hwCard);
 
+    // ---- Live Status Card ----
+    QGroupBox* statusCard = new QGroupBox("LIVE STATUS");
+    QGridLayout* statusGrid = new QGridLayout(statusCard);
+    Label_ConnectionStatus = new QLabel("Disconnected");
+    Label_DataRate = new QLabel("0 B/s");
+    Label_FrameStatus = new QLabel("Frames 0 | CRC 0 | Invalid 0");
+    Label_SampleStatus = new QLabel("IV 0 | ECL 0");
+    Label_PeakStatus = new QLabel("No data");
+    Label_PeakStatus->setWordWrap(true);
+    statusGrid->addWidget(new QLabel("State:"), 0, 0);
+    statusGrid->addWidget(Label_ConnectionStatus, 0, 1);
+    statusGrid->addWidget(new QLabel("Receive:"), 1, 0);
+    statusGrid->addWidget(Label_DataRate, 1, 1);
+    statusGrid->addWidget(Label_FrameStatus, 2, 0, 1, 2);
+    statusGrid->addWidget(Label_SampleStatus, 3, 0, 1, 2);
+    statusGrid->addWidget(Label_PeakStatus, 4, 0, 1, 2);
+    configLayout->addWidget(statusCard);
+
     // Hidden internal combos
     for (int i = 1; i < 4; ++i) {
         Combo_Configs[i] = new QComboBox();
@@ -233,6 +255,15 @@ void SerialPortAssistant::initUI() {
     paramGrid->addWidget(Edit_XRange, 6, 1);
 
     configLayout->addWidget(paramCard);
+
+    // ---- Presets Card ----
+    QGroupBox* presetCard = new QGroupBox("EXPERIMENT PRESETS");
+    QHBoxLayout* presetLayout = new QHBoxLayout(presetCard);
+    Btn_SavePreset = new QPushButton("SAVE PRESET");
+    Btn_LoadPreset = new QPushButton("LOAD PRESET");
+    presetLayout->addWidget(Btn_SavePreset);
+    presetLayout->addWidget(Btn_LoadPreset);
+    configLayout->addWidget(presetCard);
 
     // ---- Axis Range Card ----
     QGroupBox* axisCard = new QGroupBox("AXIS RANGE");
@@ -281,6 +312,24 @@ void SerialPortAssistant::initUI() {
 
     configLayout->addWidget(axisCard);
 
+    // ---- Curve Controls ----
+    QGroupBox* curveCard = new QGroupBox("CURVE CONTROL");
+    QGridLayout* curveGrid = new QGridLayout(curveCard);
+    CheckBox_ChannelVisible[0] = new QCheckBox("Voltage");
+    CheckBox_ChannelVisible[1] = new QCheckBox("Current");
+    CheckBox_ChannelVisible[2] = new QCheckBox("ECL");
+    for (QCheckBox* checkBox : CheckBox_ChannelVisible) checkBox->setChecked(true);
+    CheckBox_PausePlot = new QCheckBox("Pause Display");
+    CheckBox_AutoScale = new QCheckBox("Auto Scale");
+    Btn_FitChart = new QPushButton("FIT DATA");
+    curveGrid->addWidget(CheckBox_ChannelVisible[0], 0, 0);
+    curveGrid->addWidget(CheckBox_ChannelVisible[1], 0, 1);
+    curveGrid->addWidget(CheckBox_ChannelVisible[2], 0, 2);
+    curveGrid->addWidget(CheckBox_PausePlot, 1, 0, 1, 2);
+    curveGrid->addWidget(CheckBox_AutoScale, 1, 2);
+    curveGrid->addWidget(Btn_FitChart, 2, 0, 1, 3);
+    configLayout->addWidget(curveCard);
+
     // Checkboxes
     QHBoxLayout* checkRow = new QHBoxLayout();
     CheckBox_EnablePlot = new QCheckBox("Plot Enabled");
@@ -306,6 +355,29 @@ void SerialPortAssistant::initUI() {
     configLayout->addWidget(csvCard);
     connect(Btn_BrowseCSV, &QPushButton::clicked, this, &SerialPortAssistant::browseCSVDirectory);
 
+    // ---- CSV Playback Card ----
+    QGroupBox* playbackCard = new QGroupBox("CSV PLAYBACK");
+    QGridLayout* playbackGrid = new QGridLayout(playbackCard);
+    Btn_LoadCSV = new QPushButton("LOAD CSV");
+    Btn_PlayPauseCSV = new QPushButton("PLAY");
+    Btn_PlayPauseCSV->setEnabled(false);
+    Combo_PlaybackSpeed = new QComboBox();
+    Combo_PlaybackSpeed->addItem("1x", 1.0);
+    Combo_PlaybackSpeed->addItem("5x", 5.0);
+    Combo_PlaybackSpeed->addItem("20x", 20.0);
+    Combo_PlaybackSpeed->addItem("100x", 100.0);
+    Slider_Playback = new QSlider(Qt::Horizontal);
+    Slider_Playback->setRange(0, 1000);
+    Slider_Playback->setEnabled(false);
+    Label_PlaybackFile = new QLabel("No CSV loaded");
+    Label_PlaybackFile->setWordWrap(true);
+    playbackGrid->addWidget(Btn_LoadCSV, 0, 0);
+    playbackGrid->addWidget(Btn_PlayPauseCSV, 0, 1);
+    playbackGrid->addWidget(Combo_PlaybackSpeed, 0, 2);
+    playbackGrid->addWidget(Slider_Playback, 1, 0, 1, 3);
+    playbackGrid->addWidget(Label_PlaybackFile, 2, 0, 1, 3);
+    configLayout->addWidget(playbackCard);
+
     // ---- Action Buttons ----
     SerialPort_Connect = new QPushButton("CONNECT");
     SerialPort_Connect->setObjectName("btnConnect");
@@ -329,21 +401,9 @@ void SerialPortAssistant::initUI() {
     rightScroll->setWidget(configWidget);
 
     // Button connections for axis apply
-    connect(Btn_ApplyXAxis, &QPushButton::clicked, [this]() {
-        double xMin = Edit_XMin->text().toDouble();
-        double xMax = Edit_XMax->text().toDouble();
-        if (xMin < xMax) axisX->setRange(xMin, xMax);
-        });
-    connect(Btn_ApplyYAxis, &QPushButton::clicked, [this]() {
-        double yMin = Edit_YMin->text().toDouble();
-        double yMax = Edit_YMax->text().toDouble();
-        if (yMin < yMax) axisY->setRange(yMin, yMax);
-        });
-    connect(Btn_ApplyYRight, &QPushButton::clicked, [this]() {
-        double yMin = Edit_YRightMin->text().toDouble();
-        double yMax = Edit_YRightMax->text().toDouble();
-        if (yMin < yMax) axisYRight->setRange(yMin, yMax);
-        });
+    connect(Btn_ApplyXAxis, &QPushButton::clicked, this, &SerialPortAssistant::applyManualAxisRanges);
+    connect(Btn_ApplyYAxis, &QPushButton::clicked, this, &SerialPortAssistant::applyManualAxisRanges);
+    connect(Btn_ApplyYRight, &QPushButton::clicked, this, &SerialPortAssistant::applyManualAxisRanges);
 
     splitter->addWidget(leftContainer);
     splitter->addWidget(rightScroll);
@@ -408,5 +468,3 @@ void SerialPortAssistant::updateChemLabels(int index) {
     }
     m_currentMode = index;
 }
-
-

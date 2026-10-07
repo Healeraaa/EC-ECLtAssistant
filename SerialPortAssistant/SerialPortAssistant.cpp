@@ -11,6 +11,8 @@
 
 SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) {
     this->setWindowTitle(QString::fromUtf8("EC-ECL Recorder"));
+    this->resize(1400, 850);
+    this->setMinimumSize(1000, 650);
     serialPort = new QSerialPort(this);
 
     initializeModeDefaults();
@@ -26,6 +28,18 @@ SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) 
     m_csvFlushTimer = new QTimer(this);
     connect(m_csvFlushTimer, &QTimer::timeout, this, &SerialPortAssistant::flushCSVBuffer);
 
+    m_statusTimer = new QTimer(this);
+    connect(m_statusTimer, &QTimer::timeout, this, &SerialPortAssistant::updateStatusPanel);
+    m_statusTimer->start(500);
+
+    m_playbackTimer = new QTimer(this);
+    m_playbackTimer->setInterval(30);
+    connect(m_playbackTimer, &QTimer::timeout, this, &SerialPortAssistant::advanceCSVPlayback);
+
+    m_dataRateTimer.start();
+    resetStatistics();
+    updateStatusPanel();
+
     this->startTimer(1000);
     updatePortList();
 }
@@ -40,11 +54,31 @@ void SerialPortAssistant::setupConnections() {
     connect(Combo_Mode, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SerialPortAssistant::updateChemLabels);
     connect(SerialPort_Send, &QPushButton::clicked, this, &SerialPortAssistant::sendConfig);
     connect(Btn_ResetPlot, &QPushButton::clicked, this, &SerialPortAssistant::clearAllData);
-    connect(serialPort, &QSerialPort::readyRead, [=]() {
-        m_frameParser.append(serialPort->readAll());
+    connect(serialPort, &QSerialPort::readyRead, [this]() {
+        const QByteArray receivedData = serialPort->readAll();
+        m_receivedBytes += static_cast<quint64>(receivedData.size());
+        m_frameParser.append(receivedData);
         });
     // 动态启停 CSV 记录
     connect(CheckBox_SaveCSV, &QCheckBox::toggled, this, &SerialPortAssistant::onSaveCSVToggled);
+    for (QCheckBox* checkBox : CheckBox_ChannelVisible) {
+        connect(checkBox, &QCheckBox::toggled, this, &SerialPortAssistant::updateSeriesVisibility);
+    }
+    connect(CheckBox_PausePlot, &QCheckBox::toggled, [this](bool paused) {
+        if (!paused && CheckBox_EnablePlot->isChecked()) updatePlotSeries();
+    });
+    connect(CheckBox_AutoScale, &QCheckBox::toggled, [this](bool enabled) {
+        if (enabled) fitChartToData();
+    });
+    connect(CheckBox_EnablePlot, &QCheckBox::toggled, [this](bool enabled) {
+        if (enabled && !CheckBox_PausePlot->isChecked()) updatePlotSeries();
+    });
+    connect(Btn_FitChart, &QPushButton::clicked, this, &SerialPortAssistant::fitChartToData);
+    connect(Btn_SavePreset, &QPushButton::clicked, this, &SerialPortAssistant::savePreset);
+    connect(Btn_LoadPreset, &QPushButton::clicked, this, &SerialPortAssistant::loadPreset);
+    connect(Btn_LoadCSV, &QPushButton::clicked, this, &SerialPortAssistant::loadCSVForPlayback);
+    connect(Btn_PlayPauseCSV, &QPushButton::clicked, this, &SerialPortAssistant::toggleCSVPlayback);
+    connect(Slider_Playback, &QSlider::valueChanged, this, &SerialPortAssistant::seekCSVPlayback);
 }
 
 void SerialPortAssistant::sendConfig() {
@@ -127,8 +161,11 @@ void SerialPortAssistant::processBinaryBuffer() {
         processFrame(frame);
     }
 
-    if (CheckBox_EnablePlot->isChecked()) {
+    if (CheckBox_EnablePlot->isChecked() && !CheckBox_PausePlot->isChecked()) {
         updatePlotSeries();
+    }
+    else if (CheckBox_EnablePlot->isChecked()) {
+        trimPlotBuffers();
     }
 
     const ProtocolParserStats& stats = m_frameParser.stats();
@@ -146,21 +183,7 @@ void SerialPortAssistant::processBinaryBuffer() {
 }
 
 void SerialPortAssistant::processFrame(const ProtocolFrame& frame) {
-    while (seriesList.size() < 3) {
-        QLineSeries* series = new QLineSeries();
-        const int seriesIndex = seriesList.size();
-        const QColor colors[] = { QColor("#00e5ff"), QColor("#ff6bc1"), QColor("#00ff88") };
-        const char* names[] = { "Voltage", "Current", "ECL" };
-
-        QPen pen(colors[seriesIndex]);
-        pen.setWidth(2);
-        series->setPen(pen);
-        series->setName(names[seriesIndex]);
-        chartView->chart()->addSeries(series);
-        series->attachAxis(axisX);
-        series->attachAxis(seriesIndex == 2 ? axisYRight : axisY);
-        seriesList.append(series);
-    }
+    ensureSeriesCreated();
 
     const bool plotEnabled = CheckBox_EnablePlot->isChecked();
     if (frame.type == ProtocolFrame::Type::IV) {
@@ -172,11 +195,15 @@ void SerialPortAssistant::processFrame(const ProtocolFrame& frame) {
             const double time = m_ivTimeSeconds;
             m_ivTimeSeconds += 1.0 / static_cast<double>(frame.sampleRate);
 
-            if (plotEnabled) {
-                if (std::isfinite(voltage)) {
+            if (std::isfinite(voltage)) {
+                updateChannelStatistics(0, voltage);
+                if (plotEnabled) {
                     m_plotData[0].append(QPointF(time, voltage));
                 }
-                if (std::isfinite(current)) {
+            }
+            if (std::isfinite(current)) {
+                updateChannelStatistics(1, current);
+                if (plotEnabled) {
                     m_plotData[1].append(QPointF(time, current));
                 }
             }
@@ -192,8 +219,11 @@ void SerialPortAssistant::processFrame(const ProtocolFrame& frame) {
             const double time = m_lightTimeSeconds;
             m_lightTimeSeconds += 1.0 / static_cast<double>(frame.sampleRate);
 
-            if (plotEnabled && std::isfinite(value)) {
-                m_plotData[2].append(QPointF(time, value));
+            if (std::isfinite(value)) {
+                updateChannelStatistics(2, value);
+                if (plotEnabled) {
+                    m_plotData[2].append(QPointF(time, value));
+                }
             }
             if (m_csvRecorder.isRecording()) {
                 m_csvRecorder.appendLight(time, value);
@@ -204,6 +234,22 @@ void SerialPortAssistant::processFrame(const ProtocolFrame& frame) {
 }
 
 void SerialPortAssistant::updatePlotSeries() {
+    trimPlotBuffers();
+
+    for (int seriesIndex = 0; seriesIndex < 3; ++seriesIndex) {
+        if (seriesIndex < seriesList.size()) {
+            seriesList[seriesIndex]->replace(m_plotData[seriesIndex]);
+        }
+    }
+
+    updateSeriesVisibility();
+    if (CheckBox_AutoScale->isChecked()) {
+        fitChartToData();
+    }
+    chartView->chart()->update();
+}
+
+void SerialPortAssistant::trimPlotBuffers() {
     int displayPointCount = Edit_XRange->text().toInt();
     if (displayPointCount <= 0) displayPointCount = 100;
     displayPointCount = qMin(displayPointCount, 50000);
@@ -214,16 +260,12 @@ void SerialPortAssistant::updatePlotSeries() {
         if (excessPointCount > 0) {
             points.remove(0, excessPointCount);
         }
-        if (seriesIndex < seriesList.size()) {
-            seriesList[seriesIndex]->replace(points);
-        }
     }
-
-    chartView->chart()->update();
 }
 
 void SerialPortAssistant::togglePort(bool open) {
     if (open) {
+        stopCSVPlayback();
         serialPort->setPortName(SerialPort_Number->currentText());
         serialPort->setBaudRate(SerialPort_BaudRate->currentText().toInt());
         serialPort->setReadBufferSize(4 * 1024 * 1024);
@@ -240,6 +282,11 @@ void SerialPortAssistant::togglePort(bool open) {
             m_ivTimeSeconds = 0.0;
             m_lightTimeSeconds = 0.0;
             m_lastReportedFrames = 0;
+            m_receivedBytes = 0;
+            m_lastStatusBytes = 0;
+            m_lastStatusFrames = 0;
+            m_dataRateTimer.restart();
+            resetStatistics();
 
             if (CheckBox_SaveCSV->isChecked()) {
                 startCSVLogging();
@@ -249,6 +296,10 @@ void SerialPortAssistant::togglePort(bool open) {
             SerialPort_Connect->setEnabled(false);
             SerialPort_Disonnect->setEnabled(true);
             SerialPort_Send->setEnabled(true);
+            Btn_LoadCSV->setEnabled(false);
+            Btn_PlayPauseCSV->setEnabled(false);
+            Slider_Playback->setEnabled(false);
+            updateStatusPanel();
         }
     }
     else {
@@ -261,6 +312,10 @@ void SerialPortAssistant::togglePort(bool open) {
         SerialPort_Connect->setEnabled(true);
         SerialPort_Disonnect->setEnabled(false);
         SerialPort_Send->setEnabled(false);
+        Btn_LoadCSV->setEnabled(true);
+        Btn_PlayPauseCSV->setEnabled(!m_playbackData.isEmpty());
+        Slider_Playback->setEnabled(!m_playbackData.isEmpty());
+        updateStatusPanel();
         saveSettings();
     }
 }
@@ -268,6 +323,7 @@ void SerialPortAssistant::togglePort(bool open) {
 void SerialPortAssistant::clearAllData() {
     for (QLineSeries* series : seriesList) series->clear();
     for (QVector<QPointF>& points : m_plotData) points.clear();
+    resetStatistics();
     SerialPort_ReceiveAear->appendPlainText(QString::fromUtf8("[System] Chart reset; acquisition time was preserved."));
 }
 
@@ -428,6 +484,13 @@ void SerialPortAssistant::loadSettings() {
     Edit_YMax->setText(settings.value("plot/yMax", "2").toString());
     Edit_YRightMin->setText(settings.value("plot/yRightMin", "-2").toString());
     Edit_YRightMax->setText(settings.value("plot/yRightMax", "2").toString());
+    CheckBox_AutoScale->setChecked(settings.value("plot/autoScale", false).toBool());
+    for (int channel = 0; channel < 3; ++channel) {
+        CheckBox_ChannelVisible[channel]->setChecked(
+            settings.value(QString("plot/channel%1Visible").arg(channel), true).toBool());
+    }
+    Combo_PlaybackSpeed->setCurrentIndex(
+        qBound(0, settings.value("playback/speedIndex", 0).toInt(), Combo_PlaybackSpeed->count() - 1));
 
     const int mode = qBound(0, settings.value("experiment/mode", 0).toInt(), Combo_Mode->count() - 1);
     m_currentMode = -1;
@@ -455,6 +518,13 @@ void SerialPortAssistant::saveSettings() {
     settings.setValue("plot/yMax", Edit_YMax->text());
     settings.setValue("plot/yRightMin", Edit_YRightMin->text());
     settings.setValue("plot/yRightMax", Edit_YRightMax->text());
+    settings.setValue("plot/autoScale", CheckBox_AutoScale->isChecked());
+    for (int channel = 0; channel < 3; ++channel) {
+        settings.setValue(
+            QString("plot/channel%1Visible").arg(channel),
+            CheckBox_ChannelVisible[channel]->isChecked());
+    }
+    settings.setValue("playback/speedIndex", Combo_PlaybackSpeed->currentIndex());
 
     for (int mode = 0; mode < 4; ++mode) {
         for (int parameter = 0; parameter < 6; ++parameter) {

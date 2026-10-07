@@ -21,8 +21,11 @@
 #include <QDoubleSpinBox>
 #include <QTimer>
 #include <QVector>
+#include <QSlider>
+#include <QElapsedTimer>
 #include <array>
 
+#include "CsvPlaybackData.h"
 #include "CsvRecorder.h"
 #include "ProtocolFrameParser.h"
 
@@ -47,7 +50,15 @@ private:
     void sendConfig();
     void processBinaryBuffer();
     void processFrame(const ProtocolFrame& frame);
+    void ensureSeriesCreated();
     void updatePlotSeries();
+    void trimPlotBuffers();
+    void applyManualAxisRanges();
+    void fitChartToData();
+    void updateSeriesVisibility();
+    void resetStatistics();
+    void updateChannelStatistics(int channel, double value);
+    void updateStatusPanel();
     bool validateConfig(QString* message) const;
     void initializeModeDefaults();
     void loadSettings();
@@ -61,6 +72,16 @@ private:
     void browseCSVDirectory();
     QString createCSVFilePath() const;
 
+    // 预设与 CSV 回放
+    void savePreset();
+    void loadPreset();
+    void loadCSVForPlayback();
+    void toggleCSVPlayback();
+    void advanceCSVPlayback();
+    void seekCSVPlayback(int sliderValue);
+    void stopCSVPlayback();
+    void appendPlaybackRow(const CsvPlaybackRow& row);
+
     // UI 组件
     QPlainTextEdit* SerialPort_ReceiveAear;
     QPushButton* SerialPort_Connect, * SerialPort_Disonnect, * SerialPort_Send, * Btn_ResetPlot;
@@ -70,8 +91,23 @@ private:
     QComboBox* Combo_Range;  // 新的范围选择下拉框，替代 Combo_Configs[1], [2], [3]
 
     QCheckBox* CheckBox_SaveCSV, * CheckBox_EnablePlot;
+    QCheckBox* CheckBox_PausePlot, * CheckBox_AutoScale;
+    QCheckBox* CheckBox_ChannelVisible[3];
     QLineEdit* Edit_CSVDirectory;
     QLabel* Label_CSVStatus;
+    QLabel* Label_ConnectionStatus;
+    QLabel* Label_DataRate;
+    QLabel* Label_FrameStatus;
+    QLabel* Label_SampleStatus;
+    QLabel* Label_PeakStatus;
+    QLabel* Label_PlaybackFile;
+    QPushButton* Btn_FitChart;
+    QPushButton* Btn_SavePreset;
+    QPushButton* Btn_LoadPreset;
+    QPushButton* Btn_LoadCSV;
+    QPushButton* Btn_PlayPauseCSV;
+    QComboBox* Combo_PlaybackSpeed;
+    QSlider* Slider_Playback;
     QLineEdit* Edit_XRange;
     QLineEdit* Edit_XMin, * Edit_XMax;
     QLineEdit* Edit_YMin, * Edit_YMax;
@@ -92,6 +128,14 @@ private:
     QSerialPort* serialPort;
     QStringList lastPortList;
 
+    struct ChannelStatistics {
+        bool hasValue = false;
+        double minimum = 0.0;
+        double maximum = 0.0;
+        quint64 count = 0;
+    };
+    ChannelStatistics m_channelStatistics[3];
+
     // 全局时间跟踪
     uint32_t ivSamplingRate = 0;
     uint32_t lightSamplingRate = 0;
@@ -104,6 +148,18 @@ private:
     CsvRecorder m_csvRecorder;
     QTimer* m_csvFlushTimer;
     QTimer* m_processTimer;
+    QTimer* m_statusTimer;
+
+    CsvPlaybackData m_playbackData;
+    QTimer* m_playbackTimer;
+    int m_playbackRowIndex = 0;
+    double m_playbackTimeSeconds = 0.0;
+    bool m_playbackActive = false;
+
+    QElapsedTimer m_dataRateTimer;
+    quint64 m_receivedBytes = 0;
+    quint64 m_lastStatusBytes = 0;
+    quint64 m_lastStatusFrames = 0;
 
     std::array<std::array<double, 6>, 4> m_modeValues;
     int m_currentMode = -1;
