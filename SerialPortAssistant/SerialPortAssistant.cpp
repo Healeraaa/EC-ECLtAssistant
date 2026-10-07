@@ -462,7 +462,7 @@ void SerialPortAssistant::sendConfig() {
         // 33 uA
         {3, 0, 0},  // Gain100K, Gain1X, Gain1X
         // 100 uA
-        {2, 1, 1},  // Gain10K, Gain10X, Gain3.3X
+        {2, 0, 1},  // Gain10K, Gain1X, Gain3.3X
         // 330 uA
         {2, 0, 0},  // Gain10K, Gain1X, Gain1X
         // 1 mA
