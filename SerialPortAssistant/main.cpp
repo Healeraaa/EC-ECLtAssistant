@@ -1,4 +1,5 @@
 #include "SerialPortAssistant.h"
+#include "AppVersion.h"
 #include <QtWidgets/QApplication>
 
 int main(int argc, char* argv[])
@@ -9,6 +10,9 @@ int main(int argc, char* argv[])
 #endif
 
     QApplication a(argc, argv);
+    QCoreApplication::setOrganizationName("EC-ECL");
+    QCoreApplication::setApplicationName(EC_ECL_APP_NAME);
+    QCoreApplication::setApplicationVersion(EC_ECL_APP_VERSION);
 
     // 设置应用程序的全局字体（可选，防止中文显示为乱码或方块）
     QFont font = a.font();

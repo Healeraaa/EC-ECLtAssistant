@@ -35,6 +35,9 @@
     <QtMoc Include="SerialPortAssistant.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <ClInclude Include="AppVersion.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="ChartInteractionView.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -69,7 +69,7 @@ void SerialPortAssistant::initUI() {
     leftLayout->setContentsMargins(0, 0, 0, 0);
     leftLayout->setSpacing(6);
 
-    QLabel* debugLabel = new QLabel("DEBUG CONSOLE");
+    QLabel* debugLabel = new QLabel(QString::fromUtf8("调试日志"));
     debugLabel->setObjectName("sectionLabel");
     leftLayout->addWidget(debugLabel);
 
@@ -93,7 +93,7 @@ void SerialPortAssistant::initUI() {
     chart->setAnimationOptions(QChart::NoAnimation);
 
     axisX = new QValueAxis(); axisX->setRange(0, 100);
-    axisX->setTitleText("Time (s)");
+    axisX->setTitleText(QString::fromUtf8("时间 (s)"));
     axisX->setTitleBrush(QColor("#94a3b8"));
     axisX->setLabelsColor(QColor("#94a3b8"));
     axisX->setGridLineColor(QColor("#1e293b"));
@@ -101,7 +101,7 @@ void SerialPortAssistant::initUI() {
     axisX->setShadesPen(Qt::NoPen);
 
     axisY = new QValueAxis(); axisY->setRange(-2, 2);
-    axisY->setTitleText("Voltage / Current");
+    axisY->setTitleText(QString::fromUtf8("电压 / 电流"));
     axisY->setTitleBrush(QColor("#94a3b8"));
     axisY->setLabelsColor(QColor("#94a3b8"));
     axisY->setGridLineColor(QColor("#1e293b"));
@@ -124,7 +124,7 @@ void SerialPortAssistant::initUI() {
     chartView->setObjectName("chartView");
     chartView->setRubberBand(QChartView::RectangleRubberBand);
 
-    QLabel* chartLabel = new QLabel("WAVEFORM");
+    QLabel* chartLabel = new QLabel(QString::fromUtf8("实时波形"));
     chartLabel->setObjectName("sectionLabel");
     leftLayout->addWidget(chartLabel);
     leftLayout->addWidget(chartView, 5);
@@ -146,7 +146,7 @@ void SerialPortAssistant::initUI() {
     configLayout->setSpacing(8);
 
     // ---- Hardware Card ----
-    QGroupBox* hwCard = new QGroupBox("HARDWARE");
+    QGroupBox* hwCard = new QGroupBox(QString::fromUtf8("设备与模式"));
     QGridLayout* hwGrid = new QGridLayout(hwCard);
     hwGrid->setSpacing(6);
     hwGrid->setColumnStretch(0, 0);
@@ -159,22 +159,22 @@ void SerialPortAssistant::initUI() {
     SerialPort_BaudRate = new QComboBox();
     SerialPort_BaudRate->addItems({ "115200", "921600", "2000000", "3000000","600000" });
     SerialPort_BaudRate->setCurrentText("600000");
-    hwGrid->addWidget(new QLabel("Port:"), row, 0);
+    hwGrid->addWidget(new QLabel(QString::fromUtf8("串口：")), row, 0);
     hwGrid->addWidget(SerialPort_Number, row, 1);
-    hwGrid->addWidget(new QLabel("Baud:"), row, 2);
+    hwGrid->addWidget(new QLabel(QString::fromUtf8("波特率：")), row, 2);
     hwGrid->addWidget(SerialPort_BaudRate, row++, 3);
 
     Combo_Mode = new QComboBox();
     Combo_Mode->addItems({ QString::fromUtf8("CV (循环伏安)"), QString::fromUtf8("DPV (差分脉冲)"), QString::fromUtf8("CA (计时电流)"), QString::fromUtf8("GPCI") });
-    hwGrid->addWidget(new QLabel("Mode:"), row, 0);
+    hwGrid->addWidget(new QLabel(QString::fromUtf8("模式：")), row, 0);
     hwGrid->addWidget(Combo_Mode, row++, 1, 1, 3);
 
     Combo_Configs[0] = new QComboBox();
-    Combo_Configs[0]->addItem("Channel 1", 2);
-    Combo_Configs[0]->addItem("Channel 2", 3);
-    Combo_Configs[0]->addItem("Channel 3", 1);
-    Combo_Configs[0]->addItem("Channel 4", 0);
-    hwGrid->addWidget(new QLabel("Channel:"), row, 0);
+    Combo_Configs[0]->addItem(QString::fromUtf8("通道 1"), 2);
+    Combo_Configs[0]->addItem(QString::fromUtf8("通道 2"), 3);
+    Combo_Configs[0]->addItem(QString::fromUtf8("通道 3"), 1);
+    Combo_Configs[0]->addItem(QString::fromUtf8("通道 4"), 0);
+    hwGrid->addWidget(new QLabel(QString::fromUtf8("通道：")), row, 0);
     hwGrid->addWidget(Combo_Configs[0], row++, 1, 1, 3);
 
     Combo_Range = new QComboBox();
@@ -191,24 +191,24 @@ void SerialPortAssistant::initUI() {
     Combo_Range->addItem("10 mA");
     Combo_Range->addItem("30.3 mA");
     Combo_Range->addItem("100 mA");
-    hwGrid->addWidget(new QLabel("Range:"), row, 0);
+    hwGrid->addWidget(new QLabel(QString::fromUtf8("量程：")), row, 0);
     hwGrid->addWidget(Combo_Range, row++, 1, 1, 3);
 
     configLayout->addWidget(hwCard);
 
     // ---- Live Status Card ----
-    QGroupBox* statusCard = new QGroupBox("LIVE STATUS");
+    QGroupBox* statusCard = new QGroupBox(QString::fromUtf8("实时状态"));
     QGridLayout* statusGrid = new QGridLayout(statusCard);
-    Label_ConnectionStatus = new QLabel("Disconnected");
+    Label_ConnectionStatus = new QLabel(QString::fromUtf8("未连接"));
     Label_DataRate = new QLabel("0 B/s");
-    Label_FrameStatus = new QLabel("Frames 0 | CRC 0 | Invalid 0");
+    Label_FrameStatus = new QLabel(QString::fromUtf8("有效帧 0 | CRC 0 | 无效帧 0"));
     Label_SampleStatus = new QLabel("IV 0 | ECL 0");
-    Label_PeakStatus = new QLabel("No data");
-    Label_RenderStatus = new QLabel("Plot 0 pts | 0 ms");
+    Label_PeakStatus = new QLabel(QString::fromUtf8("暂无数据"));
+    Label_RenderStatus = new QLabel(QString::fromUtf8("绘图 0 点 | 0 ms"));
     Label_PeakStatus->setWordWrap(true);
-    statusGrid->addWidget(new QLabel("State:"), 0, 0);
+    statusGrid->addWidget(new QLabel(QString::fromUtf8("状态：")), 0, 0);
     statusGrid->addWidget(Label_ConnectionStatus, 0, 1);
-    statusGrid->addWidget(new QLabel("Receive:"), 1, 0);
+    statusGrid->addWidget(new QLabel(QString::fromUtf8("接收：")), 1, 0);
     statusGrid->addWidget(Label_DataRate, 1, 1);
     statusGrid->addWidget(Label_FrameStatus, 2, 0, 1, 2);
     statusGrid->addWidget(Label_SampleStatus, 3, 0, 1, 2);
@@ -236,7 +236,7 @@ void SerialPortAssistant::initUI() {
     Combo_Configs[3]->setCurrentIndex(3);
 
     // ---- Parameters Card ----
-    QGroupBox* paramCard = new QGroupBox("PARAMETERS");
+    QGroupBox* paramCard = new QGroupBox(QString::fromUtf8("实验参数"));
     QGridLayout* paramGrid = new QGridLayout(paramCard);
     paramGrid->setSpacing(6);
     paramGrid->setColumnStretch(0, 0);
@@ -253,27 +253,27 @@ void SerialPortAssistant::initUI() {
 
     Edit_XRange = new QLineEdit("50000");
     Edit_XRange->setValidator(new QIntValidator(1, 50000, Edit_XRange));
-    paramGrid->addWidget(new QLabel("Display Points:"), 6, 0);
+    paramGrid->addWidget(new QLabel(QString::fromUtf8("缓存点数：")), 6, 0);
     paramGrid->addWidget(Edit_XRange, 6, 1);
 
     Edit_RenderPoints = new QLineEdit("4000");
     Edit_RenderPoints->setValidator(new QIntValidator(200, 20000, Edit_RenderPoints));
-    paramGrid->addWidget(new QLabel("Render Points:"), 7, 0);
+    paramGrid->addWidget(new QLabel(QString::fromUtf8("绘图点数：")), 7, 0);
     paramGrid->addWidget(Edit_RenderPoints, 7, 1);
 
     configLayout->addWidget(paramCard);
 
     // ---- Presets Card ----
-    QGroupBox* presetCard = new QGroupBox("EXPERIMENT PRESETS");
+    QGroupBox* presetCard = new QGroupBox(QString::fromUtf8("实验预设"));
     QHBoxLayout* presetLayout = new QHBoxLayout(presetCard);
-    Btn_SavePreset = new QPushButton("SAVE PRESET");
-    Btn_LoadPreset = new QPushButton("LOAD PRESET");
+    Btn_SavePreset = new QPushButton(QString::fromUtf8("保存预设"));
+    Btn_LoadPreset = new QPushButton(QString::fromUtf8("加载预设"));
     presetLayout->addWidget(Btn_SavePreset);
     presetLayout->addWidget(Btn_LoadPreset);
     configLayout->addWidget(presetCard);
 
     // ---- Axis Range Card ----
-    QGroupBox* axisCard = new QGroupBox("AXIS RANGE");
+    QGroupBox* axisCard = new QGroupBox(QString::fromUtf8("坐标轴范围"));
     QGridLayout* axisGrid = new QGridLayout(axisCard);
     axisGrid->setSpacing(4);
     axisGrid->setColumnStretch(0, 0);
@@ -308,9 +308,9 @@ void SerialPortAssistant::initUI() {
         edit->setValidator(validator);
     }
 
-    QPushButton* Btn_ApplyXAxis = new QPushButton("Apply X");
-    QPushButton* Btn_ApplyYAxis = new QPushButton("Apply Y1");
-    QPushButton* Btn_ApplyYRight = new QPushButton("Apply Y2");
+    QPushButton* Btn_ApplyXAxis = new QPushButton(QString::fromUtf8("应用 X"));
+    QPushButton* Btn_ApplyYAxis = new QPushButton(QString::fromUtf8("应用 Y1"));
+    QPushButton* Btn_ApplyYRight = new QPushButton(QString::fromUtf8("应用 Y2"));
     QHBoxLayout* axisBtnRow = new QHBoxLayout();
     axisBtnRow->addWidget(Btn_ApplyXAxis);
     axisBtnRow->addWidget(Btn_ApplyYAxis);
@@ -320,14 +320,14 @@ void SerialPortAssistant::initUI() {
     configLayout->addWidget(axisCard);
 
     // ---- Curve Controls ----
-    QGroupBox* curveCard = new QGroupBox("CURVE CONTROL");
+    QGroupBox* curveCard = new QGroupBox(QString::fromUtf8("曲线控制"));
     QGridLayout* curveGrid = new QGridLayout(curveCard);
-    CheckBox_ChannelVisible[0] = new QCheckBox("Voltage");
-    CheckBox_ChannelVisible[1] = new QCheckBox("Current");
+    CheckBox_ChannelVisible[0] = new QCheckBox(QString::fromUtf8("电压"));
+    CheckBox_ChannelVisible[1] = new QCheckBox(QString::fromUtf8("电流"));
     CheckBox_ChannelVisible[2] = new QCheckBox("ECL");
     for (QCheckBox* checkBox : CheckBox_ChannelVisible) checkBox->setChecked(true);
     CheckBox_PausePlot = new QCheckBox(QString::fromUtf8("暂停曲线刷新"));
-    CheckBox_AutoScale = new QCheckBox("Auto Scale");
+    CheckBox_AutoScale = new QCheckBox(QString::fromUtf8("自动缩放"));
     CheckBox_Crosshair = new QCheckBox(QString::fromUtf8("十字光标"));
     CheckBox_Crosshair->setChecked(true);
     CheckBox_Measurement = new QCheckBox(QString::fromUtf8("两点测量"));
@@ -335,7 +335,7 @@ void SerialPortAssistant::initUI() {
     Label_CursorReadout->setWordWrap(true);
     Label_Measurement = new QLabel(QString::fromUtf8("测量未启用"));
     Label_Measurement->setWordWrap(true);
-    Btn_FitChart = new QPushButton("FIT DATA");
+    Btn_FitChart = new QPushButton(QString::fromUtf8("适应数据"));
     Btn_ResetZoom = new QPushButton(QString::fromUtf8("恢复缩放"));
     Btn_ExportChart = new QPushButton(QString::fromUtf8("导出 PNG"));
     curveGrid->addWidget(CheckBox_ChannelVisible[0], 0, 0);
@@ -354,23 +354,23 @@ void SerialPortAssistant::initUI() {
 
     // Checkboxes
     QHBoxLayout* checkRow = new QHBoxLayout();
-    CheckBox_EnablePlot = new QCheckBox("Plot Enabled");
+    CheckBox_EnablePlot = new QCheckBox(QString::fromUtf8("启用绘图"));
     CheckBox_EnablePlot->setChecked(true);
-    CheckBox_SaveCSV = new QCheckBox("Save CSV");
+    CheckBox_SaveCSV = new QCheckBox(QString::fromUtf8("保存 CSV"));
     CheckBox_SaveCSV->setChecked(true);
     checkRow->addWidget(CheckBox_EnablePlot);
     checkRow->addWidget(CheckBox_SaveCSV);
     configLayout->addLayout(checkRow);
 
     // ---- CSV Card ----
-    QGroupBox* csvCard = new QGroupBox("CSV RECORDING");
+    QGroupBox* csvCard = new QGroupBox(QString::fromUtf8("CSV 记录"));
     QGridLayout* csvGrid = new QGridLayout(csvCard);
     Edit_CSVDirectory = new QLineEdit();
     Edit_CSVDirectory->setReadOnly(true);
-    QPushButton* Btn_BrowseCSV = new QPushButton("BROWSE...");
-    Label_CSVStatus = new QLabel("Not recording");
+    QPushButton* Btn_BrowseCSV = new QPushButton(QString::fromUtf8("选择目录…"));
+    Label_CSVStatus = new QLabel(QString::fromUtf8("未记录"));
     Label_CSVStatus->setWordWrap(true);
-    csvGrid->addWidget(new QLabel("Directory:"), 0, 0);
+    csvGrid->addWidget(new QLabel(QString::fromUtf8("目录：")), 0, 0);
     csvGrid->addWidget(Edit_CSVDirectory, 0, 1);
     csvGrid->addWidget(Btn_BrowseCSV, 0, 2);
     csvGrid->addWidget(Label_CSVStatus, 1, 0, 1, 3);
@@ -378,10 +378,10 @@ void SerialPortAssistant::initUI() {
     connect(Btn_BrowseCSV, &QPushButton::clicked, this, &SerialPortAssistant::browseCSVDirectory);
 
     // ---- CSV Playback Card ----
-    QGroupBox* playbackCard = new QGroupBox("CSV PLAYBACK");
+    QGroupBox* playbackCard = new QGroupBox(QString::fromUtf8("CSV 回放"));
     QGridLayout* playbackGrid = new QGridLayout(playbackCard);
-    Btn_LoadCSV = new QPushButton("LOAD CSV");
-    Btn_PlayPauseCSV = new QPushButton("PLAY");
+    Btn_LoadCSV = new QPushButton(QString::fromUtf8("加载 CSV"));
+    Btn_PlayPauseCSV = new QPushButton(QString::fromUtf8("播放"));
     Btn_PlayPauseCSV->setEnabled(false);
     Combo_PlaybackSpeed = new QComboBox();
     Combo_PlaybackSpeed->addItem("1x", 1.0);
@@ -391,7 +391,7 @@ void SerialPortAssistant::initUI() {
     Slider_Playback = new QSlider(Qt::Horizontal);
     Slider_Playback->setRange(0, 1000);
     Slider_Playback->setEnabled(false);
-    Label_PlaybackFile = new QLabel("No CSV loaded");
+    Label_PlaybackFile = new QLabel(QString::fromUtf8("未加载 CSV"));
     Label_PlaybackFile->setWordWrap(true);
     Combo_RecentCSV = new QComboBox();
     Combo_RecentCSV->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
@@ -408,20 +408,22 @@ void SerialPortAssistant::initUI() {
     configLayout->addWidget(playbackCard);
 
     // ---- Action Buttons ----
-    SerialPort_Connect = new QPushButton("CONNECT");
+    SerialPort_Connect = new QPushButton(QString::fromUtf8("连接串口"));
     SerialPort_Connect->setObjectName("btnConnect");
-    SerialPort_Disonnect = new QPushButton("DISCONNECT");
+    SerialPort_Disonnect = new QPushButton(QString::fromUtf8("断开串口"));
     SerialPort_Disonnect->setObjectName("btnResult");
     SerialPort_Disonnect->setEnabled(false);
-    SerialPort_Send = new QPushButton("SEND CONFIG");
+    SerialPort_Send = new QPushButton(QString::fromUtf8("发送配置"));
     SerialPort_Send->setObjectName("btnSend");
     SerialPort_Send->setEnabled(false);
-    Btn_ResetPlot = new QPushButton("RESET CHART");
+    Btn_ResetPlot = new QPushButton(QString::fromUtf8("清空曲线"));
+    Btn_About = new QPushButton(QString::fromUtf8("关于 / 版本信息"));
 
     configLayout->addWidget(SerialPort_Connect);
     configLayout->addWidget(SerialPort_Disonnect);
     configLayout->addWidget(SerialPort_Send);
     configLayout->addWidget(Btn_ResetPlot);
+    configLayout->addWidget(Btn_About);
     configLayout->addStretch();
 
     // 让布局内容的最小尺寸触发滚动条

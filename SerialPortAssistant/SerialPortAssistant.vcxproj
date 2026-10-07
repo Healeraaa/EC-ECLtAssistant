@@ -97,6 +97,7 @@
     <QtRcc Include="SerialPortAssistant.qrc" />
     <QtUic Include="SerialPortAssistant.ui" />
     <QtMoc Include="SerialPortAssistant.h" />
+    <ClInclude Include="AppVersion.h" />
     <ClInclude Include="ChartInteractionView.h" />
     <ClInclude Include="CsvPlaybackData.h" />
     <ClInclude Include="CsvRecorder.h" />

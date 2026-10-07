@@ -30,7 +30,11 @@ void SerialPortAssistant::ensureSeriesCreated()
         QLineSeries* series = new QLineSeries();
         const int seriesIndex = seriesList.size();
         const QColor colors[] = { QColor("#00e5ff"), QColor("#ff6bc1"), QColor("#00ff88") };
-        const char* names[] = { "Voltage", "Current", "ECL" };
+        const QString names[] = {
+            QString::fromUtf8("电压"),
+            QString::fromUtf8("电流"),
+            QStringLiteral("ECL")
+        };
 
         QPen pen(colors[seriesIndex]);
         pen.setWidth(2);

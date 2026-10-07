@@ -62,7 +62,7 @@ void SerialPortAssistant::finishCSVPlaybackLoad()
     m_frameParser.clear();
     m_lastStatusFrames = 0;
     Label_PlaybackFile->setText(
-        QString("%1 | %2 rows | %3 s")
+        QString::fromUtf8("%1 | %2 行 | %3 s")
             .arg(QFileInfo(m_pendingCsvPath).fileName())
             .arg(m_playbackData.rows().size())
             .arg(m_playbackData.duration(), 0, 'f', 3));
@@ -127,7 +127,7 @@ void SerialPortAssistant::toggleCSVPlayback()
 
     if (m_playbackRowIndex >= m_playbackData.rows().size()) seekCSVPlayback(0);
     m_playbackActive = true;
-    Btn_PlayPauseCSV->setText("PAUSE");
+    Btn_PlayPauseCSV->setText(QString::fromUtf8("暂停"));
     m_playbackTimer->start();
     updateStatusPanel();
 }
@@ -193,7 +193,7 @@ void SerialPortAssistant::stopCSVPlayback()
 {
     m_playbackTimer->stop();
     m_playbackActive = false;
-    if (Btn_PlayPauseCSV) Btn_PlayPauseCSV->setText("PLAY");
+    if (Btn_PlayPauseCSV) Btn_PlayPauseCSV->setText(QString::fromUtf8("播放"));
 }
 
 void SerialPortAssistant::appendPlaybackRow(const CsvPlaybackRow& row)

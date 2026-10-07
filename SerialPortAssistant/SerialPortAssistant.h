@@ -49,6 +49,7 @@ private:
     void updatePortList();
     void togglePort(bool open);
     void clearAllData();
+    void showAboutDialog();
     void updateChemLabels(int index);
     void sendConfig();
     void processBinaryBuffer();
@@ -95,7 +96,7 @@ private:
 
     // UI 组件
     QPlainTextEdit* SerialPort_ReceiveAear;
-    QPushButton* SerialPort_Connect, * SerialPort_Disonnect, * SerialPort_Send, * Btn_ResetPlot;
+    QPushButton* SerialPort_Connect, * SerialPort_Disonnect, * SerialPort_Send, * Btn_ResetPlot, * Btn_About;
     QComboBox* SerialPort_Number, * SerialPort_BaudRate, * Combo_Mode;
 
     QComboBox* Combo_Configs[4];

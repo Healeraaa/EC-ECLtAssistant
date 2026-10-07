@@ -1,4 +1,5 @@
 #include "SerialPortAssistant.h"
+#include "AppVersion.h"
 #include <QMessageBox>
 #include <QTimerEvent>
 #include <QFileDialog>
@@ -10,7 +11,7 @@
 #include <cmath>
 
 SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) {
-    this->setWindowTitle(QString::fromUtf8("EC-ECL Recorder"));
+    this->setWindowTitle(QString("%1 v%2").arg(EC_ECL_APP_NAME, EC_ECL_APP_VERSION));
     this->resize(1400, 850);
     this->setMinimumSize(1000, 650);
     serialPort = new QSerialPort(this);
@@ -70,6 +71,7 @@ void SerialPortAssistant::setupConnections() {
     connect(Combo_Mode, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SerialPortAssistant::updateChemLabels);
     connect(SerialPort_Send, &QPushButton::clicked, this, &SerialPortAssistant::sendConfig);
     connect(Btn_ResetPlot, &QPushButton::clicked, this, &SerialPortAssistant::clearAllData);
+    connect(Btn_About, &QPushButton::clicked, this, &SerialPortAssistant::showAboutDialog);
     connect(serialPort, &QSerialPort::readyRead, [this]() {
         const QByteArray receivedData = serialPort->readAll();
         m_receivedBytes += static_cast<quint64>(receivedData.size());
@@ -315,6 +317,18 @@ void SerialPortAssistant::clearAllData() {
     m_plotBuffer.clear();
     clearMeasurement();
     SerialPort_ReceiveAear->appendPlainText(QString::fromUtf8("[System] Chart reset; acquisition time was preserved."));
+}
+
+void SerialPortAssistant::showAboutDialog() {
+    QMessageBox::about(
+        this,
+        QString::fromUtf8("关于 EC-ECL Recorder"),
+        QString::fromUtf8(
+            "<h3>EC-ECL Recorder v%1</h3>"
+            "<p>用于电化学与电化学发光数据采集、保存、回放和分析。</p>"
+            "<p>Qt 版本：%2<br>构建时间：%3</p>"
+            "<p>CSV 原始数据完整保存；界面抽样仅影响曲线显示。</p>")
+            .arg(EC_ECL_APP_VERSION, qVersion(), EC_ECL_BUILD_TIMESTAMP));
 }
 
 void SerialPortAssistant::updatePortList() {
