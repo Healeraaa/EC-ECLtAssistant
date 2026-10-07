@@ -99,16 +99,25 @@
     <QtMoc Include="SerialPortAssistant.h" />
     <ClInclude Include="CsvPlaybackData.h" />
     <ClInclude Include="CsvRecorder.h" />
+    <ClInclude Include="ExperimentPreset.h" />
+    <ClInclude Include="PlotDataBuffer.h" />
     <ClInclude Include="ProtocolFrameParser.h" />
     <ClCompile Include="CsvPlaybackData.cpp" />
     <ClCompile Include="CsvRecorder.cpp" />
+    <ClCompile Include="ExperimentPreset.cpp" />
+    <ClCompile Include="PlotDataBuffer.cpp" />
     <ClCompile Include="ProtocolFrameParser.cpp" />
     <ClCompile Include="SerialPortAssistant.cpp" />
-    <ClCompile Include="SerialPortAssistantFeatures.cpp" />
+    <ClCompile Include="SerialPortAssistantPlayback.cpp" />
+    <ClCompile Include="SerialPortAssistantPlot.cpp" />
+    <ClCompile Include="SerialPortAssistantPreset.cpp" />
+    <ClCompile Include="SerialPortAssistantStatus.cpp" />
     <ClCompile Include="SerialPortAssistantUi.cpp" />
     <ClCompile Include="main.cpp" />
     <None Include="tests\CsvPlaybackDataTests.cpp" />
     <None Include="tests\CsvRecorderTests.cpp" />
+    <None Include="tests\ExperimentPresetTests.cpp" />
+    <None Include="tests\PlotDataBufferTests.cpp" />
     <None Include="tests\ProtocolFrameParserTests.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

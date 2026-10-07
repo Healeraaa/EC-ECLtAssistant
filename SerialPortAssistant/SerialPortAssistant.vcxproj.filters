@@ -41,6 +41,12 @@
     <ClInclude Include="CsvRecorder.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ExperimentPreset.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PlotDataBuffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="ProtocolFrameParser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -50,13 +56,28 @@
     <ClCompile Include="CsvRecorder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ExperimentPreset.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PlotDataBuffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="ProtocolFrameParser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SerialPortAssistant.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="SerialPortAssistantFeatures.cpp">
+    <ClCompile Include="SerialPortAssistantPlayback.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SerialPortAssistantPlot.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SerialPortAssistantPreset.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SerialPortAssistantStatus.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SerialPortAssistantUi.cpp">
@@ -73,6 +94,12 @@
       <Filter>Test Files</Filter>
     </None>
     <None Include="tests\CsvRecorderTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
+    <None Include="tests\ExperimentPresetTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
+    <None Include="tests\PlotDataBufferTests.cpp">
       <Filter>Test Files</Filter>
     </None>
     <None Include="tests\ProtocolFrameParserTests.cpp">

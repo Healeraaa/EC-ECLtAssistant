@@ -319,7 +319,7 @@ void SerialPortAssistant::initUI() {
     CheckBox_ChannelVisible[1] = new QCheckBox("Current");
     CheckBox_ChannelVisible[2] = new QCheckBox("ECL");
     for (QCheckBox* checkBox : CheckBox_ChannelVisible) checkBox->setChecked(true);
-    CheckBox_PausePlot = new QCheckBox("Pause Display");
+    CheckBox_PausePlot = new QCheckBox(QString::fromUtf8("暂停曲线刷新"));
     CheckBox_AutoScale = new QCheckBox("Auto Scale");
     Btn_FitChart = new QPushButton("FIT DATA");
     curveGrid->addWidget(CheckBox_ChannelVisible[0], 0, 0);

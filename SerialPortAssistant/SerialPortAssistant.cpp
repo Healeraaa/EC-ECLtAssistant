@@ -37,7 +37,7 @@ SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) 
     connect(m_playbackTimer, &QTimer::timeout, this, &SerialPortAssistant::advanceCSVPlayback);
 
     m_dataRateTimer.start();
-    resetStatistics();
+    m_plotBuffer.clear();
     updateStatusPanel();
 
     this->startTimer(1000);
@@ -195,18 +195,8 @@ void SerialPortAssistant::processFrame(const ProtocolFrame& frame) {
             const double time = m_ivTimeSeconds;
             m_ivTimeSeconds += 1.0 / static_cast<double>(frame.sampleRate);
 
-            if (std::isfinite(voltage)) {
-                updateChannelStatistics(0, voltage);
-                if (plotEnabled) {
-                    m_plotData[0].append(QPointF(time, voltage));
-                }
-            }
-            if (std::isfinite(current)) {
-                updateChannelStatistics(1, current);
-                if (plotEnabled) {
-                    m_plotData[1].append(QPointF(time, current));
-                }
-            }
+            m_plotBuffer.append(0, time, voltage, plotEnabled);
+            m_plotBuffer.append(1, time, current, plotEnabled);
             if (m_csvRecorder.isRecording()) {
                 m_csvRecorder.appendIv(time, voltage, current);
             }
@@ -219,47 +209,12 @@ void SerialPortAssistant::processFrame(const ProtocolFrame& frame) {
             const double time = m_lightTimeSeconds;
             m_lightTimeSeconds += 1.0 / static_cast<double>(frame.sampleRate);
 
-            if (std::isfinite(value)) {
-                updateChannelStatistics(2, value);
-                if (plotEnabled) {
-                    m_plotData[2].append(QPointF(time, value));
-                }
-            }
+            m_plotBuffer.append(2, time, value, plotEnabled);
             if (m_csvRecorder.isRecording()) {
                 m_csvRecorder.appendLight(time, value);
             }
         }
         globalOpticalSampleCount += static_cast<quint64>(frame.values.size());
-    }
-}
-
-void SerialPortAssistant::updatePlotSeries() {
-    trimPlotBuffers();
-
-    for (int seriesIndex = 0; seriesIndex < 3; ++seriesIndex) {
-        if (seriesIndex < seriesList.size()) {
-            seriesList[seriesIndex]->replace(m_plotData[seriesIndex]);
-        }
-    }
-
-    updateSeriesVisibility();
-    if (CheckBox_AutoScale->isChecked()) {
-        fitChartToData();
-    }
-    chartView->chart()->update();
-}
-
-void SerialPortAssistant::trimPlotBuffers() {
-    int displayPointCount = Edit_XRange->text().toInt();
-    if (displayPointCount <= 0) displayPointCount = 100;
-    displayPointCount = qMin(displayPointCount, 50000);
-
-    for (int seriesIndex = 0; seriesIndex < 3; ++seriesIndex) {
-        QVector<QPointF>& points = m_plotData[seriesIndex];
-        const int excessPointCount = points.size() - displayPointCount;
-        if (excessPointCount > 0) {
-            points.remove(0, excessPointCount);
-        }
     }
 }
 
@@ -273,7 +228,7 @@ void SerialPortAssistant::togglePort(bool open) {
             serialPort->clear();
             m_frameParser.clear();
             for (QLineSeries* series : seriesList) series->clear();
-            for (QVector<QPointF>& points : m_plotData) points.clear();
+            m_plotBuffer.clear();
 
             ivSamplingRate = 0;
             lightSamplingRate = 0;
@@ -286,7 +241,6 @@ void SerialPortAssistant::togglePort(bool open) {
             m_lastStatusBytes = 0;
             m_lastStatusFrames = 0;
             m_dataRateTimer.restart();
-            resetStatistics();
 
             if (CheckBox_SaveCSV->isChecked()) {
                 startCSVLogging();
@@ -322,8 +276,7 @@ void SerialPortAssistant::togglePort(bool open) {
 
 void SerialPortAssistant::clearAllData() {
     for (QLineSeries* series : seriesList) series->clear();
-    for (QVector<QPointF>& points : m_plotData) points.clear();
-    resetStatistics();
+    m_plotBuffer.clear();
     SerialPort_ReceiveAear->appendPlainText(QString::fromUtf8("[System] Chart reset; acquisition time was preserved."));
 }
 

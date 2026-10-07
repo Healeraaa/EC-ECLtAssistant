@@ -27,6 +27,8 @@
 
 #include "CsvPlaybackData.h"
 #include "CsvRecorder.h"
+#include "ExperimentPreset.h"
+#include "PlotDataBuffer.h"
 #include "ProtocolFrameParser.h"
 
 QT_CHARTS_USE_NAMESPACE
@@ -56,8 +58,6 @@ private:
     void applyManualAxisRanges();
     void fitChartToData();
     void updateSeriesVisibility();
-    void resetStatistics();
-    void updateChannelStatistics(int channel, double value);
     void updateStatusPanel();
     bool validateConfig(QString* message) const;
     void initializeModeDefaults();
@@ -123,18 +123,10 @@ private:
     QValueAxis* axisX, * axisY;
     QValueAxis* axisYRight;
     QList<QLineSeries*> seriesList;
-    QVector<QPointF> m_plotData[3];
+    PlotDataBuffer m_plotBuffer;
     ProtocolFrameParser m_frameParser;
     QSerialPort* serialPort;
     QStringList lastPortList;
-
-    struct ChannelStatistics {
-        bool hasValue = false;
-        double minimum = 0.0;
-        double maximum = 0.0;
-        quint64 count = 0;
-    };
-    ChannelStatistics m_channelStatistics[3];
 
     // 全局时间跟踪
     uint32_t ivSamplingRate = 0;
