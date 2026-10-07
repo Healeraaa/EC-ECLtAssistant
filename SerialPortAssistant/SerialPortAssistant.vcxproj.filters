@@ -21,6 +21,9 @@
       <UniqueIdentifier>{639EADAA-A684-42e4-A9AD-28FC9BCB8F7C}</UniqueIdentifier>
       <Extensions>ts</Extensions>
     </Filter>
+    <Filter Include="Test Files">
+      <UniqueIdentifier>{703AF4CA-4BF4-4BF0-974B-B29C9D2C340D}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <QtRcc Include="SerialPortAssistant.qrc">
@@ -32,7 +35,22 @@
     <QtMoc Include="SerialPortAssistant.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <ClInclude Include="CsvRecorder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ProtocolFrameParser.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClCompile Include="CsvRecorder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ProtocolFrameParser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="SerialPortAssistant.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SerialPortAssistantUi.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -40,5 +58,13 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="tests\CsvRecorderTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
+    <None Include="tests\ProtocolFrameParserTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

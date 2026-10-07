@@ -19,11 +19,12 @@
 #include <QtCharts/QValueAxis>
 #include <QSpinBox>
 #include <QDoubleSpinBox>
-#include <QDataStream>
-#include <QFile>
-#include <QTextStream>
-#include <QDateTime>
 #include <QTimer>
+#include <QVector>
+#include <array>
+
+#include "CsvRecorder.h"
+#include "ProtocolFrameParser.h"
 
 QT_CHARTS_USE_NAMESPACE
 
@@ -45,15 +46,20 @@ private:
     void updateChemLabels(int index);
     void sendConfig();
     void processBinaryBuffer();
-    uint16_t calculateCRC16(const QByteArray& data);
-    void processBufferOptimized();
+    void processFrame(const ProtocolFrame& frame);
+    void updatePlotSeries();
+    bool validateConfig(QString* message) const;
+    void initializeModeDefaults();
+    void loadSettings();
+    void saveSettings();
 
     // CSV 保存相关
     void startCSVLogging();
     void stopCSVLogging();
     void flushCSVBuffer();
     void onSaveCSVToggled(bool checked);
-    void alignCSV(const QString& filePath);
+    void browseCSVDirectory();
+    QString createCSVFilePath() const;
 
     // UI 组件
     QPlainTextEdit* SerialPort_ReceiveAear;
@@ -64,6 +70,8 @@ private:
     QComboBox* Combo_Range;  // 新的范围选择下拉框，替代 Combo_Configs[1], [2], [3]
 
     QCheckBox* CheckBox_SaveCSV, * CheckBox_EnablePlot;
+    QLineEdit* Edit_CSVDirectory;
+    QLabel* Label_CSVStatus;
     QLineEdit* Edit_XRange;
     QLineEdit* Edit_XMin, * Edit_XMax;
     QLineEdit* Edit_YMin, * Edit_YMax;
@@ -79,21 +87,27 @@ private:
     QValueAxis* axisX, * axisY;
     QValueAxis* axisYRight;
     QList<QLineSeries*> seriesList;
-    QByteArray buffer;
+    QVector<QPointF> m_plotData[3];
+    ProtocolFrameParser m_frameParser;
     QSerialPort* serialPort;
-    QVector<QString> lastPortList;
+    QStringList lastPortList;
 
     // 全局时间跟踪
-    uint32_t baseSamplingRate = 0;
+    uint32_t ivSamplingRate = 0;
+    uint32_t lightSamplingRate = 0;
     uint64_t globalSamplePairCount = 0;
     uint64_t globalOpticalSampleCount = 0;
+    double m_ivTimeSeconds = 0.0;
+    double m_lightTimeSeconds = 0.0;
 
     // CSV 保存相关成员
-    QFile* m_csvFile = nullptr;
-    QTextStream* m_csvStream = nullptr;
-    QStringList m_csvBuffer;
+    CsvRecorder m_csvRecorder;
     QTimer* m_csvFlushTimer;
-    bool m_isSaving = false;
+    QTimer* m_processTimer;
+
+    std::array<std::array<double, 6>, 4> m_modeValues;
+    int m_currentMode = -1;
+    quint64 m_lastReportedFrames = 0;
 };
 
 #endif // SERIALPORTASSISTANT_H

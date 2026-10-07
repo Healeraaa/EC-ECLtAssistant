@@ -69,6 +69,7 @@
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -81,6 +82,7 @@
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
     </ClCompile>
@@ -95,8 +97,15 @@
     <QtRcc Include="SerialPortAssistant.qrc" />
     <QtUic Include="SerialPortAssistant.ui" />
     <QtMoc Include="SerialPortAssistant.h" />
+    <ClInclude Include="CsvRecorder.h" />
+    <ClInclude Include="ProtocolFrameParser.h" />
+    <ClCompile Include="CsvRecorder.cpp" />
+    <ClCompile Include="ProtocolFrameParser.cpp" />
     <ClCompile Include="SerialPortAssistant.cpp" />
+    <ClCompile Include="SerialPortAssistantUi.cpp" />
     <ClCompile Include="main.cpp" />
+    <None Include="tests\CsvRecorderTests.cpp" />
+    <None Include="tests\ProtocolFrameParserTests.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
