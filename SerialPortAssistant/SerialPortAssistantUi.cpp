@@ -119,7 +119,7 @@ void SerialPortAssistant::initUI() {
     chart->addAxis(axisY, Qt::AlignLeft);
     chart->addAxis(axisYRight, Qt::AlignRight);
 
-    chartView = new QChartView(chart);
+    chartView = new ChartInteractionView(chart);
     chartView->setRenderHint(QPainter::Antialiasing);
     chartView->setObjectName("chartView");
     chartView->setRubberBand(QChartView::RectangleRubberBand);
@@ -321,13 +321,28 @@ void SerialPortAssistant::initUI() {
     for (QCheckBox* checkBox : CheckBox_ChannelVisible) checkBox->setChecked(true);
     CheckBox_PausePlot = new QCheckBox(QString::fromUtf8("暂停曲线刷新"));
     CheckBox_AutoScale = new QCheckBox("Auto Scale");
+    CheckBox_Crosshair = new QCheckBox(QString::fromUtf8("十字光标"));
+    CheckBox_Crosshair->setChecked(true);
+    CheckBox_Measurement = new QCheckBox(QString::fromUtf8("两点测量"));
+    Label_CursorReadout = new QLabel(QString::fromUtf8("移动鼠标读取曲线数值"));
+    Label_CursorReadout->setWordWrap(true);
+    Label_Measurement = new QLabel(QString::fromUtf8("测量未启用"));
+    Label_Measurement->setWordWrap(true);
     Btn_FitChart = new QPushButton("FIT DATA");
+    Btn_ResetZoom = new QPushButton(QString::fromUtf8("恢复缩放"));
+    Btn_ExportChart = new QPushButton(QString::fromUtf8("导出 PNG"));
     curveGrid->addWidget(CheckBox_ChannelVisible[0], 0, 0);
     curveGrid->addWidget(CheckBox_ChannelVisible[1], 0, 1);
     curveGrid->addWidget(CheckBox_ChannelVisible[2], 0, 2);
     curveGrid->addWidget(CheckBox_PausePlot, 1, 0, 1, 2);
     curveGrid->addWidget(CheckBox_AutoScale, 1, 2);
-    curveGrid->addWidget(Btn_FitChart, 2, 0, 1, 3);
+    curveGrid->addWidget(CheckBox_Crosshair, 2, 0, 1, 2);
+    curveGrid->addWidget(CheckBox_Measurement, 2, 2);
+    curveGrid->addWidget(Label_CursorReadout, 3, 0, 1, 3);
+    curveGrid->addWidget(Label_Measurement, 4, 0, 1, 3);
+    curveGrid->addWidget(Btn_FitChart, 5, 0);
+    curveGrid->addWidget(Btn_ResetZoom, 5, 1);
+    curveGrid->addWidget(Btn_ExportChart, 5, 2);
     configLayout->addWidget(curveCard);
 
     // Checkboxes
@@ -371,11 +386,18 @@ void SerialPortAssistant::initUI() {
     Slider_Playback->setEnabled(false);
     Label_PlaybackFile = new QLabel("No CSV loaded");
     Label_PlaybackFile->setWordWrap(true);
+    Combo_RecentCSV = new QComboBox();
+    Combo_RecentCSV->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    Combo_RecentCSV->setMinimumContentsLength(18);
+    Btn_OpenRecentCSV = new QPushButton(QString::fromUtf8("打开最近文件"));
+    Btn_OpenRecentCSV->setEnabled(false);
     playbackGrid->addWidget(Btn_LoadCSV, 0, 0);
     playbackGrid->addWidget(Btn_PlayPauseCSV, 0, 1);
     playbackGrid->addWidget(Combo_PlaybackSpeed, 0, 2);
     playbackGrid->addWidget(Slider_Playback, 1, 0, 1, 3);
     playbackGrid->addWidget(Label_PlaybackFile, 2, 0, 1, 3);
+    playbackGrid->addWidget(Combo_RecentCSV, 3, 0, 1, 2);
+    playbackGrid->addWidget(Btn_OpenRecentCSV, 3, 2);
     configLayout->addWidget(playbackCard);
 
     // ---- Action Buttons ----

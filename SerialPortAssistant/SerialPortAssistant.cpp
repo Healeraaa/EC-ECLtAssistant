@@ -74,10 +74,27 @@ void SerialPortAssistant::setupConnections() {
         if (enabled && !CheckBox_PausePlot->isChecked()) updatePlotSeries();
     });
     connect(Btn_FitChart, &QPushButton::clicked, this, &SerialPortAssistant::fitChartToData);
+    connect(Btn_ResetZoom, &QPushButton::clicked, this, &SerialPortAssistant::resetChartZoom);
+    connect(Btn_ExportChart, &QPushButton::clicked, this, &SerialPortAssistant::exportChartImage);
+    connect(CheckBox_Crosshair, &QCheckBox::toggled, [this](bool enabled) {
+        chartView->setCursorEnabled(enabled);
+        if (!enabled) Label_CursorReadout->setText(QString::fromUtf8("十字光标已关闭"));
+    });
+    connect(CheckBox_Measurement, &QCheckBox::toggled, [this](bool enabled) {
+        clearMeasurement();
+        Label_Measurement->setText(enabled
+            ? QString::fromUtf8("请在曲线上单击选择测量点 A")
+            : QString::fromUtf8("测量未启用"));
+    });
+    chartView->setCursorMovedHandler(
+        [this](const QPointF& position) { handleChartCursor(position); });
+    chartView->setPlotClickedHandler(
+        [this](const QPointF& position) { handleChartClick(position); });
     connect(Btn_SavePreset, &QPushButton::clicked, this, &SerialPortAssistant::savePreset);
     connect(Btn_LoadPreset, &QPushButton::clicked, this, &SerialPortAssistant::loadPreset);
     connect(Btn_LoadCSV, &QPushButton::clicked, this, &SerialPortAssistant::loadCSVForPlayback);
     connect(Btn_PlayPauseCSV, &QPushButton::clicked, this, &SerialPortAssistant::toggleCSVPlayback);
+    connect(Btn_OpenRecentCSV, &QPushButton::clicked, this, &SerialPortAssistant::openRecentCSV);
     connect(Slider_Playback, &QSlider::valueChanged, this, &SerialPortAssistant::seekCSVPlayback);
 }
 
@@ -229,6 +246,7 @@ void SerialPortAssistant::togglePort(bool open) {
             m_frameParser.clear();
             for (QLineSeries* series : seriesList) series->clear();
             m_plotBuffer.clear();
+            clearMeasurement();
 
             ivSamplingRate = 0;
             lightSamplingRate = 0;
@@ -252,6 +270,7 @@ void SerialPortAssistant::togglePort(bool open) {
             SerialPort_Send->setEnabled(true);
             Btn_LoadCSV->setEnabled(false);
             Btn_PlayPauseCSV->setEnabled(false);
+            Btn_OpenRecentCSV->setEnabled(false);
             Slider_Playback->setEnabled(false);
             updateStatusPanel();
         }
@@ -268,6 +287,7 @@ void SerialPortAssistant::togglePort(bool open) {
         SerialPort_Send->setEnabled(false);
         Btn_LoadCSV->setEnabled(true);
         Btn_PlayPauseCSV->setEnabled(!m_playbackData.isEmpty());
+        Btn_OpenRecentCSV->setEnabled(!m_recentCsvFiles.isEmpty());
         Slider_Playback->setEnabled(!m_playbackData.isEmpty());
         updateStatusPanel();
         saveSettings();
@@ -277,6 +297,7 @@ void SerialPortAssistant::togglePort(bool open) {
 void SerialPortAssistant::clearAllData() {
     for (QLineSeries* series : seriesList) series->clear();
     m_plotBuffer.clear();
+    clearMeasurement();
     SerialPort_ReceiveAear->appendPlainText(QString::fromUtf8("[System] Chart reset; acquisition time was preserved."));
 }
 
@@ -438,12 +459,16 @@ void SerialPortAssistant::loadSettings() {
     Edit_YRightMin->setText(settings.value("plot/yRightMin", "-2").toString());
     Edit_YRightMax->setText(settings.value("plot/yRightMax", "2").toString());
     CheckBox_AutoScale->setChecked(settings.value("plot/autoScale", false).toBool());
+    CheckBox_Crosshair->setChecked(settings.value("plot/crosshair", true).toBool());
+    chartView->setCursorEnabled(CheckBox_Crosshair->isChecked());
     for (int channel = 0; channel < 3; ++channel) {
         CheckBox_ChannelVisible[channel]->setChecked(
             settings.value(QString("plot/channel%1Visible").arg(channel), true).toBool());
     }
     Combo_PlaybackSpeed->setCurrentIndex(
         qBound(0, settings.value("playback/speedIndex", 0).toInt(), Combo_PlaybackSpeed->count() - 1));
+    m_recentCsvFiles = settings.value("playback/recentFiles").toStringList();
+    updateRecentCSVList();
 
     const int mode = qBound(0, settings.value("experiment/mode", 0).toInt(), Combo_Mode->count() - 1);
     m_currentMode = -1;
@@ -472,12 +497,14 @@ void SerialPortAssistant::saveSettings() {
     settings.setValue("plot/yRightMin", Edit_YRightMin->text());
     settings.setValue("plot/yRightMax", Edit_YRightMax->text());
     settings.setValue("plot/autoScale", CheckBox_AutoScale->isChecked());
+    settings.setValue("plot/crosshair", CheckBox_Crosshair->isChecked());
     for (int channel = 0; channel < 3; ++channel) {
         settings.setValue(
             QString("plot/channel%1Visible").arg(channel),
             CheckBox_ChannelVisible[channel]->isChecked());
     }
     settings.setValue("playback/speedIndex", Combo_PlaybackSpeed->currentIndex());
+    settings.setValue("playback/recentFiles", m_recentCsvFiles);
 
     for (int mode = 0; mode < 4; ++mode) {
         for (int parameter = 0; parameter < 6; ++parameter) {

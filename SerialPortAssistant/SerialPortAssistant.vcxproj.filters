@@ -35,6 +35,9 @@
     <QtMoc Include="SerialPortAssistant.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <ClInclude Include="ChartInteractionView.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="CsvPlaybackData.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -50,6 +53,9 @@
     <ClInclude Include="ProtocolFrameParser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClCompile Include="ChartInteractionView.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="CsvPlaybackData.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

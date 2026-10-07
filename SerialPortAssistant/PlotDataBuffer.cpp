@@ -83,6 +83,37 @@ const PlotChannelStatistics& PlotDataBuffer::statistics(int channel) const
         : emptyStatistics();
 }
 
+bool PlotDataBuffer::nearestPoint(int channel, double timeSeconds, QPointF* point) const
+{
+    if (!point || channel < 0 || channel >= ChannelCount
+        || !std::isfinite(timeSeconds) || m_points[channel].isEmpty()) {
+        return false;
+    }
+
+    const QVector<QPointF>& channelPoints = m_points[channel];
+    const auto upper = std::lower_bound(
+        channelPoints.cbegin(),
+        channelPoints.cend(),
+        timeSeconds,
+        [](const QPointF& candidate, double time) { return candidate.x() < time; });
+
+    if (upper == channelPoints.cbegin()) {
+        *point = *upper;
+        return true;
+    }
+    if (upper == channelPoints.cend()) {
+        *point = channelPoints.last();
+        return true;
+    }
+
+    const QPointF& right = *upper;
+    const QPointF& left = *(upper - 1);
+    *point = std::fabs(timeSeconds - left.x()) <= std::fabs(right.x() - timeSeconds)
+        ? left
+        : right;
+    return true;
+}
+
 PlotDataRange PlotDataBuffer::range(
     const std::array<bool, ChannelCount>& visibleChannels) const
 {

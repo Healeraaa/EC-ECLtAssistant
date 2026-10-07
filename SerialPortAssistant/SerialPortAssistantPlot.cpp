@@ -1,5 +1,11 @@
 #include "SerialPortAssistant.h"
 
+#include <QDateTime>
+#include <QDir>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QMessageBox>
+#include <QStandardPaths>
 #include <algorithm>
 #include <cmath>
 
@@ -99,4 +105,114 @@ void SerialPortAssistant::updateSeriesVisibility()
          ++channel) {
         seriesList[channel]->setVisible(CheckBox_ChannelVisible[channel]->isChecked());
     }
+}
+
+void SerialPortAssistant::handleChartCursor(const QPointF& position)
+{
+    if (!CheckBox_Crosshair->isChecked()) return;
+    const QRectF plotArea = chartView->chart()->plotArea();
+    if (!plotArea.contains(position) || plotArea.width() <= 0.0) return;
+
+    const double ratio = (position.x() - plotArea.left()) / plotArea.width();
+    const double time = axisX->min() + ratio * (axisX->max() - axisX->min());
+    const char* channelNames[] = { "V", "I", "ECL" };
+    QStringList values;
+    values << QString("t=%1 s").arg(time, 0, 'g', 7);
+    for (int channel = 0; channel < PlotDataBuffer::ChannelCount; ++channel) {
+        if (!CheckBox_ChannelVisible[channel]->isChecked()) continue;
+        QPointF nearest;
+        if (m_plotBuffer.nearestPoint(channel, time, &nearest)) {
+            values << QString("%1=%2").arg(channelNames[channel]).arg(nearest.y(), 0, 'g', 7);
+        }
+    }
+    Label_CursorReadout->setText(values.join(" | "));
+}
+
+void SerialPortAssistant::handleChartClick(const QPointF& position)
+{
+    if (!CheckBox_Measurement->isChecked()) return;
+    const QRectF plotArea = chartView->chart()->plotArea();
+    if (!plotArea.contains(position) || plotArea.width() <= 0.0) return;
+
+    MeasurementPoint selected;
+    const double ratio = (position.x() - plotArea.left()) / plotArea.width();
+    selected.timeSeconds = axisX->min() + ratio * (axisX->max() - axisX->min());
+    for (int channel = 0; channel < PlotDataBuffer::ChannelCount; ++channel) {
+        QPointF nearest;
+        if (m_plotBuffer.nearestPoint(channel, selected.timeSeconds, &nearest)) {
+            selected.hasValue[channel] = true;
+            selected.values[channel] = nearest.y();
+            selected.valid = true;
+        }
+    }
+    if (!selected.valid) {
+        Label_Measurement->setText(QString::fromUtf8("当前曲线没有可测量的数据"));
+        return;
+    }
+
+    if (m_measurementClickCount == 0 || m_measurementClickCount >= 2) {
+        m_measurementPointA = selected;
+        m_measurementPointB = MeasurementPoint{};
+        m_measurementClickCount = 1;
+        Label_Measurement->setText(
+            QString::fromUtf8("A：t=%1 s；请单击选择测量点 B")
+                .arg(selected.timeSeconds, 0, 'g', 7));
+        return;
+    }
+
+    m_measurementPointB = selected;
+    m_measurementClickCount = 2;
+    const char* deltaNames[] = { "ΔV", "ΔI", "ΔECL" };
+    QStringList result;
+    result << QString::fromUtf8("Δt=%1 s")
+        .arg(m_measurementPointB.timeSeconds - m_measurementPointA.timeSeconds, 0, 'g', 7);
+    for (int channel = 0; channel < PlotDataBuffer::ChannelCount; ++channel) {
+        if (m_measurementPointA.hasValue[channel] && m_measurementPointB.hasValue[channel]) {
+            result << QString("%1=%2")
+                .arg(deltaNames[channel])
+                .arg(m_measurementPointB.values[channel] - m_measurementPointA.values[channel], 0, 'g', 7);
+        }
+    }
+    Label_Measurement->setText(result.join(" | "));
+}
+
+void SerialPortAssistant::clearMeasurement()
+{
+    m_measurementPointA = MeasurementPoint{};
+    m_measurementPointB = MeasurementPoint{};
+    m_measurementClickCount = 0;
+    if (Label_Measurement) {
+        Label_Measurement->setText(CheckBox_Measurement->isChecked()
+            ? QString::fromUtf8("请在曲线上单击选择测量点 A")
+            : QString::fromUtf8("测量未启用"));
+    }
+}
+
+void SerialPortAssistant::resetChartZoom()
+{
+    chartView->chart()->zoomReset();
+    if (CheckBox_AutoScale->isChecked()) fitChartToData();
+    else applyManualAxisRanges();
+}
+
+void SerialPortAssistant::exportChartImage()
+{
+    const QString defaultDirectory = QDir(
+        QStandardPaths::writableLocation(QStandardPaths::PicturesLocation))
+        .filePath("EC-ECL");
+    QDir().mkpath(defaultDirectory);
+    QString filePath = QFileDialog::getSaveFileName(
+        this,
+        QString::fromUtf8("导出波形图片"),
+        QDir(defaultDirectory).filePath(
+            "EC-ECL_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".png"),
+        QString::fromUtf8("PNG 图片 (*.png)"));
+    if (filePath.isEmpty()) return;
+    if (QFileInfo(filePath).suffix().isEmpty()) filePath += ".png";
+
+    if (!chartView->grab().save(filePath, "PNG")) {
+        QMessageBox::warning(this, QString::fromUtf8("导出失败"), QString::fromUtf8("无法保存波形图片。"));
+        return;
+    }
+    SerialPort_ReceiveAear->appendPlainText("[Chart] Exported: " + QDir::toNativeSeparators(filePath));
 }

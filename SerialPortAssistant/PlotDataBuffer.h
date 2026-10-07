@@ -38,6 +38,7 @@ public:
 
     const QVector<QPointF>& points(int channel) const;
     const PlotChannelStatistics& statistics(int channel) const;
+    bool nearestPoint(int channel, double timeSeconds, QPointF* point) const;
     PlotDataRange range(const std::array<bool, ChannelCount>& visibleChannels) const;
 
 private:

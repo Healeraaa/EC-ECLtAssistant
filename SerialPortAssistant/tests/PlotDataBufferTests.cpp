@@ -29,6 +29,14 @@ int main()
         return 1;
     }
 
+    QPointF nearest;
+    if (!buffer.nearestPoint(0, 0.6, &nearest)
+        || nearest.x() != 1.0 || nearest.y() != 3.0
+        || buffer.nearestPoint(2, std::numeric_limits<double>::quiet_NaN(), &nearest)) {
+        std::cerr << "FAILED: nearest-point lookup mismatch\n";
+        return 1;
+    }
+
     const std::array<bool, 3> visible{{ true, true, false }};
     const PlotDataRange range = buffer.range(visible);
     if (!range.hasX || !range.hasLeftAxis || range.hasRightAxis

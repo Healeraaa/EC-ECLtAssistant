@@ -21,11 +21,18 @@ void SerialPortAssistant::loadCSVForPlayback()
         QString::fromUtf8("CSV 文件 (*.csv)"));
     if (filePath.isEmpty()) return;
 
+    openCSVForPlayback(filePath);
+}
+
+bool SerialPortAssistant::openCSVForPlayback(const QString& filePath)
+{
+    if (serialPort->isOpen() || filePath.isEmpty()) return false;
+
     stopCSVPlayback();
     QString errorMessage;
     if (!m_playbackData.load(filePath, &errorMessage)) {
         QMessageBox::warning(this, QString::fromUtf8("CSV 加载失败"), errorMessage);
-        return;
+        return false;
     }
 
     m_frameParser.clear();
@@ -38,7 +45,51 @@ void SerialPortAssistant::loadCSVForPlayback()
     Btn_PlayPauseCSV->setEnabled(true);
     Slider_Playback->setEnabled(true);
     seekCSVPlayback(0);
+    addRecentCSVFile(filePath);
     SerialPort_ReceiveAear->appendPlainText("[Playback] Loaded: " + QDir::toNativeSeparators(filePath));
+    return true;
+}
+
+void SerialPortAssistant::openRecentCSV()
+{
+    if (Combo_RecentCSV->currentIndex() < 0) return;
+    const QString filePath = Combo_RecentCSV->currentData().toString();
+    if (!QFileInfo::exists(filePath)) {
+        QMessageBox::warning(this, QString::fromUtf8("文件不存在"), QString::fromUtf8("最近使用的 CSV 文件已被移动或删除。"));
+        m_recentCsvFiles.removeAll(filePath);
+        updateRecentCSVList();
+        saveSettings();
+        return;
+    }
+    openCSVForPlayback(filePath);
+}
+
+void SerialPortAssistant::addRecentCSVFile(const QString& filePath)
+{
+    const QString normalizedPath = QDir::cleanPath(QFileInfo(filePath).absoluteFilePath());
+    for (int index = m_recentCsvFiles.size() - 1; index >= 0; --index) {
+        if (QString::compare(m_recentCsvFiles.at(index), normalizedPath, Qt::CaseInsensitive) == 0) {
+            m_recentCsvFiles.removeAt(index);
+        }
+    }
+    m_recentCsvFiles.prepend(normalizedPath);
+    while (m_recentCsvFiles.size() > 8) m_recentCsvFiles.removeLast();
+    updateRecentCSVList();
+    saveSettings();
+}
+
+void SerialPortAssistant::updateRecentCSVList()
+{
+    Combo_RecentCSV->clear();
+    for (const QString& filePath : m_recentCsvFiles) {
+        const QFileInfo fileInfo(filePath);
+        Combo_RecentCSV->addItem(fileInfo.fileName(), filePath);
+        Combo_RecentCSV->setItemData(
+            Combo_RecentCSV->count() - 1,
+            QDir::toNativeSeparators(filePath),
+            Qt::ToolTipRole);
+    }
+    Btn_OpenRecentCSV->setEnabled(!m_recentCsvFiles.isEmpty() && !serialPort->isOpen());
 }
 
 void SerialPortAssistant::toggleCSVPlayback()
@@ -105,6 +156,7 @@ void SerialPortAssistant::seekCSVPlayback(int sliderValue)
     ensureSeriesCreated();
     for (QLineSeries* series : seriesList) series->clear();
     m_plotBuffer.clear();
+    clearMeasurement();
     globalSamplePairCount = 0;
     globalOpticalSampleCount = 0;
     ivSamplingRate = 0;

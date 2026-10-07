@@ -14,7 +14,6 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGridLayout>
-#include <QtCharts/QChartView>
 #include <QtCharts/QLineSeries>
 #include <QtCharts/QValueAxis>
 #include <QSpinBox>
@@ -25,6 +24,7 @@
 #include <QElapsedTimer>
 #include <array>
 
+#include "ChartInteractionView.h"
 #include "CsvPlaybackData.h"
 #include "CsvRecorder.h"
 #include "ExperimentPreset.h"
@@ -58,6 +58,11 @@ private:
     void applyManualAxisRanges();
     void fitChartToData();
     void updateSeriesVisibility();
+    void handleChartCursor(const QPointF& position);
+    void handleChartClick(const QPointF& position);
+    void clearMeasurement();
+    void resetChartZoom();
+    void exportChartImage();
     void updateStatusPanel();
     bool validateConfig(QString* message) const;
     void initializeModeDefaults();
@@ -76,6 +81,10 @@ private:
     void savePreset();
     void loadPreset();
     void loadCSVForPlayback();
+    bool openCSVForPlayback(const QString& filePath);
+    void openRecentCSV();
+    void addRecentCSVFile(const QString& filePath);
+    void updateRecentCSVList();
     void toggleCSVPlayback();
     void advanceCSVPlayback();
     void seekCSVPlayback(int sliderValue);
@@ -92,6 +101,7 @@ private:
 
     QCheckBox* CheckBox_SaveCSV, * CheckBox_EnablePlot;
     QCheckBox* CheckBox_PausePlot, * CheckBox_AutoScale;
+    QCheckBox* CheckBox_Crosshair, * CheckBox_Measurement;
     QCheckBox* CheckBox_ChannelVisible[3];
     QLineEdit* Edit_CSVDirectory;
     QLabel* Label_CSVStatus;
@@ -101,12 +111,18 @@ private:
     QLabel* Label_SampleStatus;
     QLabel* Label_PeakStatus;
     QLabel* Label_PlaybackFile;
+    QLabel* Label_CursorReadout;
+    QLabel* Label_Measurement;
     QPushButton* Btn_FitChart;
+    QPushButton* Btn_ResetZoom;
+    QPushButton* Btn_ExportChart;
     QPushButton* Btn_SavePreset;
     QPushButton* Btn_LoadPreset;
     QPushButton* Btn_LoadCSV;
     QPushButton* Btn_PlayPauseCSV;
+    QPushButton* Btn_OpenRecentCSV;
     QComboBox* Combo_PlaybackSpeed;
+    QComboBox* Combo_RecentCSV;
     QSlider* Slider_Playback;
     QLineEdit* Edit_XRange;
     QLineEdit* Edit_XMin, * Edit_XMax;
@@ -119,7 +135,7 @@ private:
     QLabel* Label_Floats[6];
 
     // 图表与逻辑
-    QChartView* chartView;
+    ChartInteractionView* chartView;
     QValueAxis* axisX, * axisY;
     QValueAxis* axisYRight;
     QList<QLineSeries*> seriesList;
@@ -147,6 +163,17 @@ private:
     int m_playbackRowIndex = 0;
     double m_playbackTimeSeconds = 0.0;
     bool m_playbackActive = false;
+    QStringList m_recentCsvFiles;
+
+    struct MeasurementPoint {
+        bool valid = false;
+        double timeSeconds = 0.0;
+        std::array<bool, PlotDataBuffer::ChannelCount> hasValue{};
+        std::array<double, PlotDataBuffer::ChannelCount> values{};
+    };
+    MeasurementPoint m_measurementPointA;
+    MeasurementPoint m_measurementPointB;
+    int m_measurementClickCount = 0;
 
     QElapsedTimer m_dataRateTimer;
     quint64 m_receivedBytes = 0;
