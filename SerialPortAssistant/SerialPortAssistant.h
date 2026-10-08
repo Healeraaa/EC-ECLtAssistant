@@ -129,6 +129,7 @@ private:
     QLabel* Label_SampleStatus;
     QLabel* Label_PeakStatus;
     QLabel* Label_PulseAreaStatus;
+    QLabel* Label_FilterQualityStatus;
     QLabel* Label_RenderStatus;
     QLabel* Label_PlaybackFile;
     QLabel* Label_CursorReadout;

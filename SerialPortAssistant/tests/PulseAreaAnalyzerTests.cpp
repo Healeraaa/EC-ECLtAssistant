@@ -63,6 +63,41 @@ int main()
         return 1;
     }
 
+    analyzer.reset();
+    receivedPulse = false;
+    for (int index = 0; index < 100; ++index) {
+        const bool active = index >= 60 && index <= 65;
+        const double rawOptical = active ? 5000.0 : (index % 2 == 0 ? 340.0 : 360.0);
+        const double filteredOptical = active ? 5000.0 : (index % 2 == 0 ? 349.0 : 351.0);
+        SignalFilterSample raw { index * 0.01, active ? 1.3 : 0.0, 0.0, rawOptical };
+        SignalFilterResult filtered { 0.0, 0.0, filteredOptical, true, active };
+        if (analyzer.process(raw, filtered, &completed)) receivedPulse = true;
+    }
+    if (!receivedPulse
+        || !completed.qualityEvaluated
+        || completed.qualityWarning
+        || completed.noiseReductionPercent < 80.0
+        || completed.snrImprovementDb < 15.0
+        || std::fabs(completed.areaDifferencePercent) > 0.1) {
+        std::cerr << "FAILED: expected noise reduction quality metrics\n";
+        return 1;
+    }
+
+    analyzer.reset();
+    receivedPulse = false;
+    for (int index = 0; index < 100; ++index) {
+        const bool active = index >= 60 && index <= 65;
+        const double rawOptical = active ? 5000.0 : (index % 2 == 0 ? 349.0 : 351.0);
+        const double filteredOptical = active ? 5000.0 : (index % 2 == 0 ? 340.0 : 360.0);
+        SignalFilterSample raw { index * 0.01, active ? 1.3 : 0.0, 0.0, rawOptical };
+        SignalFilterResult filtered { 0.0, 0.0, filteredOptical, true, active };
+        if (analyzer.process(raw, filtered, &completed)) receivedPulse = true;
+    }
+    if (!receivedPulse || !completed.qualityEvaluated || !completed.qualityWarning) {
+        std::cerr << "FAILED: increased noise must produce a quality warning\n";
+        return 1;
+    }
+
     std::cout << "PulseAreaAnalyzer tests passed.\n";
     return 0;
 }

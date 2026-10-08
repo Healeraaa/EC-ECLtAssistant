@@ -49,6 +49,8 @@ bool PulseAreaAnalyzer::process(
         m_current.endTimeSeconds = raw.timeSeconds;
         m_current.rawBaseline = median(m_rawBaselineHistory);
         m_current.filteredBaseline = median(m_filteredBaselineHistory);
+        m_current.rawBaselineNoiseRms = standardDeviation(m_rawBaselineHistory);
+        m_current.filteredBaselineNoiseRms = standardDeviation(m_filteredBaselineHistory);
         m_current.rawPeak = raw.optical - m_current.rawBaseline;
         m_current.filteredPeak = filtered.optical - m_current.filteredBaseline;
         m_current.valid = m_rawBaselineHistory.size() >= m_baselineSamples
@@ -86,6 +88,7 @@ bool PulseAreaAnalyzer::process(
     if (voltageActive) return false;
 
     m_active = false;
+    finalizeMeasurement(&m_current);
     if (completedPulse) *completedPulse = m_current;
     appendBaselineSample(raw.optical, filtered.optical);
     return true;
@@ -96,6 +99,7 @@ bool PulseAreaAnalyzer::flush(PulseAreaMeasurement* incompletePulse)
     if (!m_active) return false;
     m_current.valid = false;
     m_current.endTimeSeconds = m_previousRaw.timeSeconds;
+    finalizeMeasurement(&m_current);
     if (incompletePulse) *incompletePulse = m_current;
     m_active = false;
     return true;
@@ -111,6 +115,57 @@ double PulseAreaAnalyzer::median(const std::deque<double>& values)
     if ((sorted.size() % 2) != 0) return upper;
     std::nth_element(sorted.begin(), sorted.begin() + middle - 1, sorted.end());
     return 0.5 * (sorted[middle - 1] + upper);
+}
+
+double PulseAreaAnalyzer::standardDeviation(const std::deque<double>& values)
+{
+    if (values.size() < 2) return 0.0;
+    double sum = 0.0;
+    for (const double value : values) sum += value;
+    const double mean = sum / static_cast<double>(values.size());
+    double squaredDifference = 0.0;
+    for (const double value : values) {
+        const double difference = value - mean;
+        squaredDifference += difference * difference;
+    }
+    return std::sqrt(squaredDifference / static_cast<double>(values.size() - 1));
+}
+
+void PulseAreaAnalyzer::finalizeMeasurement(PulseAreaMeasurement* measurement)
+{
+    if (!measurement) return;
+
+    if (std::fabs(measurement->rawArea) > 1e-18) {
+        measurement->areaDifferencePercent =
+            (measurement->filteredArea - measurement->rawArea)
+            / measurement->rawArea * 100.0;
+    }
+
+    const bool areaAvailable = std::fabs(measurement->rawArea) > 1e-18;
+    const bool noiseAvailable = measurement->rawBaselineNoiseRms > 1e-18
+        && measurement->filteredBaselineNoiseRms > 1e-18;
+    const bool peakAvailable = std::fabs(measurement->rawPeak) > 1e-18
+        && std::fabs(measurement->filteredPeak) > 1e-18;
+    if (areaAvailable && noiseAvailable && peakAvailable) {
+        measurement->noiseReductionPercent =
+            (1.0 - measurement->filteredBaselineNoiseRms
+                / measurement->rawBaselineNoiseRms) * 100.0;
+        const double rawSnr = std::fabs(measurement->rawPeak)
+            / measurement->rawBaselineNoiseRms;
+        const double filteredSnr = std::fabs(measurement->filteredPeak)
+            / measurement->filteredBaselineNoiseRms;
+        measurement->snrImprovementDb = 20.0 * std::log10(filteredSnr / rawSnr);
+        measurement->qualityEvaluated = measurement->valid
+            && std::isfinite(measurement->noiseReductionPercent)
+            && std::isfinite(measurement->snrImprovementDb)
+            && std::isfinite(measurement->areaDifferencePercent);
+    }
+
+    measurement->qualityWarning = !measurement->valid
+        || (measurement->qualityEvaluated
+            && (std::fabs(measurement->areaDifferencePercent) > 5.0
+                || measurement->noiseReductionPercent < 0.0
+                || measurement->snrImprovementDb < 0.0));
 }
 
 void PulseAreaAnalyzer::appendBaselineSample(

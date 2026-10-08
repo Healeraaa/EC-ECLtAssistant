@@ -205,9 +205,11 @@ void SerialPortAssistant::initUI() {
     Label_SampleStatus = new QLabel("IV 0 | ECL 0");
     Label_PeakStatus = new QLabel(QString::fromUtf8("暂无数据"));
     Label_PulseAreaStatus = new QLabel(QString::fromUtf8("ECL 积分：暂无脉冲"));
+    Label_FilterQualityStatus = new QLabel(QString::fromUtf8("滤波质量：暂无有效脉冲"));
     Label_RenderStatus = new QLabel(QString::fromUtf8("绘图 0 点 | 0 ms"));
     Label_PeakStatus->setWordWrap(true);
     Label_PulseAreaStatus->setWordWrap(true);
+    Label_FilterQualityStatus->setWordWrap(true);
     statusGrid->addWidget(new QLabel(QString::fromUtf8("状态：")), 0, 0);
     statusGrid->addWidget(Label_ConnectionStatus, 0, 1);
     statusGrid->addWidget(new QLabel(QString::fromUtf8("接收：")), 1, 0);
@@ -216,7 +218,8 @@ void SerialPortAssistant::initUI() {
     statusGrid->addWidget(Label_SampleStatus, 3, 0, 1, 2);
     statusGrid->addWidget(Label_PeakStatus, 4, 0, 1, 2);
     statusGrid->addWidget(Label_PulseAreaStatus, 5, 0, 1, 2);
-    statusGrid->addWidget(Label_RenderStatus, 6, 0, 1, 2);
+    statusGrid->addWidget(Label_FilterQualityStatus, 6, 0, 1, 2);
+    statusGrid->addWidget(Label_RenderStatus, 7, 0, 1, 2);
     configLayout->addWidget(statusCard);
 
     // Hidden internal combos

@@ -3,8 +3,27 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSaveFile>
+#include <QStringList>
 #include <QTextStream>
 #include <cmath>
+
+namespace {
+
+QString pulseQualityReason(const PulseAreaMeasurement& pulse)
+{
+    if (!pulse.valid) return "InvalidPulse";
+    if (!pulse.qualityEvaluated) return "NotEvaluated";
+
+    QStringList reasons;
+    if (std::fabs(pulse.areaDifferencePercent) > 5.0) {
+        reasons.append("AreaDistortion");
+    }
+    if (pulse.noiseReductionPercent < 0.0) reasons.append("NoiseIncreased");
+    if (pulse.snrImprovementDb < 0.0) reasons.append("SnrDecreased");
+    return reasons.isEmpty() ? QString("OK") : reasons.join('|');
+}
+
+} // namespace
 
 void SerialPortAssistant::resetPulseAreaResults()
 {
@@ -28,16 +47,24 @@ void SerialPortAssistant::updatePulseAreaStatus()
     if (!Label_PulseAreaStatus) return;
 
     QVector<double> validAreas;
+    const PulseAreaMeasurement* latestQuality = nullptr;
+    int warningCount = 0;
     validAreas.reserve(m_pulseSummaries.size());
     for (const PulseAreaMeasurement& pulse : m_pulseSummaries) {
         if (pulse.valid && std::isfinite(pulse.filteredArea)) {
             validAreas.append(pulse.filteredArea);
         }
+        if (pulse.qualityEvaluated) latestQuality = &pulse;
+        if (pulse.qualityWarning) ++warningCount;
     }
     if (validAreas.isEmpty()) {
         Label_PulseAreaStatus->setText(m_pulseSummaries.isEmpty()
             ? QString::fromUtf8("ECL 积分：暂无脉冲")
             : QString::fromUtf8("ECL 积分：尚无有效脉冲"));
+        if (Label_FilterQualityStatus) {
+            Label_FilterQualityStatus->setText(
+                QString::fromUtf8("滤波质量：暂无有效脉冲"));
+        }
         return;
     }
 
@@ -62,6 +89,28 @@ void SerialPortAssistant::updatePulseAreaStatus()
             .arg(validAreas.last(), 0, 'g', 8)
             .arg(mean, 0, 'g', 8)
             .arg(coefficientOfVariation, 0, 'f', 2));
+
+    if (!Label_FilterQualityStatus) return;
+    if (!latestQuality) {
+        Label_FilterQualityStatus->setText(
+            QString::fromUtf8("滤波质量：背景噪声不足，暂无法评价"));
+        return;
+    }
+    const QString snrText = QString("%1%2")
+        .arg(latestQuality->snrImprovementDb >= 0.0 ? "+" : "")
+        .arg(latestQuality->snrImprovementDb, 0, 'f', 2);
+    const QString qualityText = warningCount > 0
+        ? QString::fromUtf8("有警告")
+        : QString::fromUtf8("通过");
+    Label_FilterQualityStatus->setText(
+        QString::fromUtf8(
+            "滤波质量：%1 | 最近 SNR %2 dB | 噪声下降 %3% | 面积偏差 %4% | 警告 %5/%6")
+            .arg(qualityText)
+            .arg(snrText)
+            .arg(latestQuality->noiseReductionPercent, 0, 'f', 2)
+            .arg(latestQuality->areaDifferencePercent, 0, 'f', 3)
+            .arg(warningCount)
+            .arg(m_pulseSummaries.size()));
 }
 
 bool SerialPortAssistant::writePulseSummaryFile(
@@ -81,11 +130,10 @@ bool SerialPortAssistant::writePulseSummaryFile(
     QTextStream stream(&output);
     stream.setCodec("UTF-8");
     stream << "PulseIndex,StartTime(s),EndTime(s),RawBaseline,FilteredBaseline,"
-        "RawPeak,FilteredPeak,RawArea,FilteredArea,AreaDifference(%),Valid\n";
+        "RawPeak,FilteredPeak,RawArea,FilteredArea,RawNoiseRMS,FilteredNoiseRMS,"
+        "NoiseReduction(%),SNRImprovement(dB),AreaDifference(%),"
+        "QualityEvaluated,QualityWarning,QualityReason,Valid\n";
     for (const PulseAreaMeasurement& pulse : m_recordedPulseSummaries) {
-        const double areaDifference = std::fabs(pulse.rawArea) > 1e-18
-            ? (pulse.filteredArea - pulse.rawArea) / pulse.rawArea * 100.0
-            : 0.0;
         stream << pulse.index << ','
             << QString::number(pulse.startTimeSeconds, 'f', 6) << ','
             << QString::number(pulse.endTimeSeconds, 'f', 6) << ','
@@ -95,7 +143,14 @@ bool SerialPortAssistant::writePulseSummaryFile(
             << QString::number(pulse.filteredPeak, 'f', 9) << ','
             << QString::number(pulse.rawArea, 'f', 9) << ','
             << QString::number(pulse.filteredArea, 'f', 9) << ','
-            << QString::number(areaDifference, 'f', 6) << ','
+            << QString::number(pulse.rawBaselineNoiseRms, 'f', 9) << ','
+            << QString::number(pulse.filteredBaselineNoiseRms, 'f', 9) << ','
+            << QString::number(pulse.noiseReductionPercent, 'f', 6) << ','
+            << QString::number(pulse.snrImprovementDb, 'f', 6) << ','
+            << QString::number(pulse.areaDifferencePercent, 'f', 6) << ','
+            << (pulse.qualityEvaluated ? 1 : 0) << ','
+            << (pulse.qualityWarning ? 1 : 0) << ','
+            << pulseQualityReason(pulse) << ','
             << (pulse.valid ? 1 : 0) << '\n';
     }
     stream.flush();

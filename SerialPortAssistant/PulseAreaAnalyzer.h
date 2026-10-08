@@ -17,6 +17,13 @@ struct PulseAreaMeasurement
     double filteredPeak = 0.0;
     double rawArea = 0.0;
     double filteredArea = 0.0;
+    double rawBaselineNoiseRms = 0.0;
+    double filteredBaselineNoiseRms = 0.0;
+    double noiseReductionPercent = 0.0;
+    double snrImprovementDb = 0.0;
+    double areaDifferencePercent = 0.0;
+    bool qualityEvaluated = false;
+    bool qualityWarning = false;
     bool valid = false;
 };
 
@@ -36,6 +43,8 @@ public:
 
 private:
     static double median(const std::deque<double>& values);
+    static double standardDeviation(const std::deque<double>& values);
+    static void finalizeMeasurement(PulseAreaMeasurement* measurement);
     void appendBaselineSample(double rawOptical, double filteredOptical);
 
     double m_voltageThreshold;

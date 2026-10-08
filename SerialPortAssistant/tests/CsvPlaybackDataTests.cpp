@@ -48,6 +48,21 @@ int wmain(int argc, wchar_t* argv[])
                       << ", Latest=" << latestArea
                       << ", Mean=" << mean
                       << ", CV=" << coefficientOfVariation << "%\n";
+            for (const PulseAreaMeasurement& pulse : inspectedData.pulses()) {
+                const double areaDifference = std::abs(pulse.rawArea) > 1e-12
+                    ? (pulse.filteredArea - pulse.rawArea) / pulse.rawArea * 100.0
+                    : 0.0;
+                std::cout << "  Pulse " << pulse.index
+                          << ": raw=" << pulse.rawArea
+                          << ", filtered=" << pulse.filteredArea
+                          << ", difference=" << areaDifference
+                          << "%, peak=" << pulse.filteredPeak
+                          << ", noise=" << pulse.rawBaselineNoiseRms
+                          << "->" << pulse.filteredBaselineNoiseRms
+                          << ", snrGain=" << pulse.snrImprovementDb
+                          << "dB, warning=" << pulse.qualityWarning
+                          << ", valid=" << pulse.valid << '\n';
+            }
         }
         return 0;
     }
