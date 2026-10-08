@@ -62,10 +62,13 @@ void SerialPortAssistant::finishCSVPlaybackLoad()
     m_frameParser.clear();
     m_lastStatusFrames = 0;
     Label_PlaybackFile->setText(
-        QString::fromUtf8("%1 | %2 行 | %3 s")
+        QString::fromUtf8("%1 | %2 行 | %3 s | %4")
             .arg(QFileInfo(m_pendingCsvPath).fileName())
             .arg(m_playbackData.rows().size())
-            .arg(m_playbackData.duration(), 0, 'f', 3));
+            .arg(m_playbackData.duration(), 0, 'f', 3)
+            .arg(m_playbackData.hasFilteredData()
+                ? QString::fromUtf8("滤波可用")
+                : QString::fromUtf8("仅原始数据")));
     Btn_PlayPauseCSV->setEnabled(true);
     Slider_Playback->setEnabled(true);
     seekCSVPlayback(0);
@@ -173,7 +176,8 @@ void SerialPortAssistant::seekCSVPlayback(int sliderValue)
 
     ensureSeriesCreated();
     for (QLineSeries* series : seriesList) series->clear();
-    m_plotBuffer.clear();
+    m_rawPlotBuffer.clear();
+    m_filteredPlotBuffer.clear();
     clearMeasurement();
     globalSamplePairCount = 0;
     globalOpticalSampleCount = 0;
@@ -199,9 +203,27 @@ void SerialPortAssistant::stopCSVPlayback()
 void SerialPortAssistant::appendPlaybackRow(const CsvPlaybackRow& row)
 {
     ensureSeriesCreated();
-    if (row.hasVoltage) m_plotBuffer.append(0, row.timeSeconds, row.voltage);
-    if (row.hasCurrent) m_plotBuffer.append(1, row.timeSeconds, row.current);
-    if (row.hasOptical) m_plotBuffer.append(2, row.timeSeconds, row.optical);
+    if (row.hasVoltage) {
+        m_rawPlotBuffer.append(0, row.timeSeconds, row.voltage);
+        m_filteredPlotBuffer.append(
+            0,
+            row.timeSeconds,
+            row.hasFiltered ? row.filteredVoltage : row.voltage);
+    }
+    if (row.hasCurrent) {
+        m_rawPlotBuffer.append(1, row.timeSeconds, row.current);
+        m_filteredPlotBuffer.append(
+            1,
+            row.timeSeconds,
+            row.hasFiltered ? row.filteredCurrent : row.current);
+    }
+    if (row.hasOptical) {
+        m_rawPlotBuffer.append(2, row.timeSeconds, row.optical);
+        m_filteredPlotBuffer.append(
+            2,
+            row.timeSeconds,
+            row.hasFiltered ? row.filteredOptical : row.optical);
+    }
     if (row.hasVoltage || row.hasCurrent) ++globalSamplePairCount;
     if (row.hasOptical) ++globalOpticalSampleCount;
 }

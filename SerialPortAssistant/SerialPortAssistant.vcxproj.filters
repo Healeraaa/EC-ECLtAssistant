@@ -56,6 +56,12 @@
     <ClInclude Include="ProtocolFrameParser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="RealtimeSignalFilter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SignalFilterPipeline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClCompile Include="ChartInteractionView.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -72,6 +78,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ProtocolFrameParser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="RealtimeSignalFilter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SignalFilterPipeline.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SerialPortAssistant.cpp">
@@ -118,6 +130,18 @@
       <Filter>Test Files</Filter>
     </None>
     <None Include="tests\ProtocolFrameParserTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
+    <None Include="tests\RealtimeSignalFilterTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
+    <None Include="tests\RealtimeCsvPipelineTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
+    <None Include="tests\SignalFilterPipelineTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
+    <None Include="tools\FilterCsvPrototype.cpp">
       <Filter>Test Files</Filter>
     </None>
   </ItemGroup>

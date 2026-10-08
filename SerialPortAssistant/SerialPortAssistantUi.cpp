@@ -331,6 +331,11 @@ void SerialPortAssistant::initUI() {
     CheckBox_Crosshair = new QCheckBox(QString::fromUtf8("十字光标"));
     CheckBox_Crosshair->setChecked(true);
     CheckBox_Measurement = new QCheckBox(QString::fromUtf8("两点测量"));
+    CheckBox_EnableFilter = new QCheckBox(QString::fromUtf8("启用 GPCI 滤波"));
+    CheckBox_EnableFilter->setChecked(true);
+    Combo_FilterDisplay = new QComboBox();
+    Combo_FilterDisplay->addItem(QString::fromUtf8("显示滤波结果"), true);
+    Combo_FilterDisplay->addItem(QString::fromUtf8("显示原始数据"), false);
     Label_CursorReadout = new QLabel(QString::fromUtf8("移动鼠标读取曲线数值"));
     Label_CursorReadout->setWordWrap(true);
     Label_Measurement = new QLabel(QString::fromUtf8("测量未启用"));
@@ -345,11 +350,13 @@ void SerialPortAssistant::initUI() {
     curveGrid->addWidget(CheckBox_AutoScale, 1, 2);
     curveGrid->addWidget(CheckBox_Crosshair, 2, 0, 1, 2);
     curveGrid->addWidget(CheckBox_Measurement, 2, 2);
-    curveGrid->addWidget(Label_CursorReadout, 3, 0, 1, 3);
-    curveGrid->addWidget(Label_Measurement, 4, 0, 1, 3);
-    curveGrid->addWidget(Btn_FitChart, 5, 0);
-    curveGrid->addWidget(Btn_ResetZoom, 5, 1);
-    curveGrid->addWidget(Btn_ExportChart, 5, 2);
+    curveGrid->addWidget(CheckBox_EnableFilter, 3, 0, 1, 2);
+    curveGrid->addWidget(Combo_FilterDisplay, 3, 2);
+    curveGrid->addWidget(Label_CursorReadout, 4, 0, 1, 3);
+    curveGrid->addWidget(Label_Measurement, 5, 0, 1, 3);
+    curveGrid->addWidget(Btn_FitChart, 6, 0);
+    curveGrid->addWidget(Btn_ResetZoom, 6, 1);
+    curveGrid->addWidget(Btn_ExportChart, 6, 2);
     configLayout->addWidget(curveCard);
 
     // Checkboxes
@@ -498,4 +505,7 @@ void SerialPortAssistant::updateChemLabels(int index) {
         Spin_Floats[i]->setValue(m_modeValues[index][i]);
     }
     m_currentMode = index;
+    if (CheckBox_EnableFilter) {
+        CheckBox_EnableFilter->setEnabled(index == 3 && !serialPort->isOpen());
+    }
 }

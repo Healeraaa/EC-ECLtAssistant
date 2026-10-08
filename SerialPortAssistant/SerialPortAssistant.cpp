@@ -54,7 +54,8 @@ SerialPortAssistant::SerialPortAssistant(QWidget* parent) : QMainWindow(parent) 
         &SerialPortAssistant::finishCSVPlaybackLoad);
 
     m_dataRateTimer.start();
-    m_plotBuffer.clear();
+    m_rawPlotBuffer.clear();
+    m_filteredPlotBuffer.clear();
     updateStatusPanel();
 
     this->startTimer(1000);
@@ -90,6 +91,12 @@ void SerialPortAssistant::setupConnections() {
     });
     connect(CheckBox_EnablePlot, &QCheckBox::toggled, [this](bool enabled) {
         if (enabled && !CheckBox_PausePlot->isChecked()) updatePlotSeries();
+    });
+    connect(Combo_FilterDisplay, QOverload<int>::of(&QComboBox::currentIndexChanged), [this]() {
+        if (CheckBox_EnablePlot->isChecked() && !CheckBox_PausePlot->isChecked()) {
+            updatePlotSeries();
+        }
+        updateStatusPanel();
     });
     connect(Btn_FitChart, &QPushButton::clicked, this, &SerialPortAssistant::fitChartToData);
     connect(Btn_ResetZoom, &QPushButton::clicked, this, &SerialPortAssistant::resetChartZoom);
@@ -223,11 +230,13 @@ void SerialPortAssistant::processFrame(const ProtocolFrame& frame) {
             const double time = m_ivTimeSeconds;
             m_ivTimeSeconds += 1.0 / static_cast<double>(frame.sampleRate);
 
-            m_plotBuffer.append(0, time, voltage, plotEnabled);
-            m_plotBuffer.append(1, time, current, plotEnabled);
+            m_rawPlotBuffer.append(0, time, voltage, plotEnabled);
+            m_rawPlotBuffer.append(1, time, current, plotEnabled);
             if (m_csvRecorder.isRecording()) {
                 m_csvRecorder.appendIv(time, voltage, current);
             }
+            handleRealtimeFilteredSamples(
+                m_realtimeFilter.appendIv(time, voltage, current));
         }
         globalSamplePairCount += static_cast<quint64>(pairCount);
     }
@@ -237,13 +246,61 @@ void SerialPortAssistant::processFrame(const ProtocolFrame& frame) {
             const double time = m_lightTimeSeconds;
             m_lightTimeSeconds += 1.0 / static_cast<double>(frame.sampleRate);
 
-            m_plotBuffer.append(2, time, value, plotEnabled);
+            m_rawPlotBuffer.append(2, time, value, plotEnabled);
             if (m_csvRecorder.isRecording()) {
                 m_csvRecorder.appendLight(time, value);
             }
+            handleRealtimeFilteredSamples(m_realtimeFilter.appendLight(time, value));
         }
         globalOpticalSampleCount += static_cast<quint64>(frame.values.size());
     }
+}
+
+void SerialPortAssistant::handleRealtimeFilteredSamples(
+    const std::vector<RealtimeFilteredSample>& samples)
+{
+    const bool retainPlot = CheckBox_EnablePlot->isChecked();
+    for (const RealtimeFilteredSample& sample : samples) {
+        m_filteredPlotBuffer.append(
+            0, sample.raw.timeSeconds, sample.filtered.voltage, retainPlot);
+        m_filteredPlotBuffer.append(
+            1, sample.raw.timeSeconds, sample.filtered.current, retainPlot);
+        m_filteredPlotBuffer.append(
+            2, sample.raw.timeSeconds, sample.filtered.optical, retainPlot);
+        if (m_csvRecorder.isRecording()) {
+            m_csvRecorder.appendFiltered(
+                sample.raw.timeSeconds,
+                sample.filtered.voltage,
+                sample.filtered.current,
+                sample.filtered.optical,
+                sample.filtered.filterValid,
+                sample.filtered.gpciEvent);
+        }
+    }
+}
+
+void SerialPortAssistant::flushRealtimeFilter()
+{
+    handleRealtimeFilteredSamples(m_realtimeFilter.flush());
+    if (m_realtimeFilter.droppedPartialRows() > 0) {
+        SerialPort_ReceiveAear->appendPlainText(
+            QString("[Filter] Dropped %1 incomplete aligned rows.")
+                .arg(m_realtimeFilter.droppedPartialRows()));
+    }
+}
+
+PlotDataBuffer& SerialPortAssistant::displayPlotBuffer()
+{
+    return Combo_FilterDisplay && Combo_FilterDisplay->currentData().toBool()
+        ? m_filteredPlotBuffer
+        : m_rawPlotBuffer;
+}
+
+const PlotDataBuffer& SerialPortAssistant::displayPlotBuffer() const
+{
+    return Combo_FilterDisplay && Combo_FilterDisplay->currentData().toBool()
+        ? m_filteredPlotBuffer
+        : m_rawPlotBuffer;
 }
 
 void SerialPortAssistant::togglePort(bool open) {
@@ -263,7 +320,11 @@ void SerialPortAssistant::togglePort(bool open) {
             serialPort->clear();
             m_frameParser.clear();
             for (QLineSeries* series : seriesList) series->clear();
-            m_plotBuffer.clear();
+            m_rawPlotBuffer.clear();
+            m_filteredPlotBuffer.clear();
+            m_realtimeFilter.reset();
+            m_realtimeFilter.setEnabled(
+                Combo_Mode->currentIndex() == 3 && CheckBox_EnableFilter->isChecked());
             clearMeasurement();
 
             ivSamplingRate = 0;
@@ -283,6 +344,7 @@ void SerialPortAssistant::togglePort(bool open) {
             }
             SerialPort_Number->setEnabled(false);
             SerialPort_BaudRate->setEnabled(false);
+            CheckBox_EnableFilter->setEnabled(false);
             SerialPort_Connect->setEnabled(false);
             SerialPort_Disonnect->setEnabled(true);
             SerialPort_Send->setEnabled(true);
@@ -295,10 +357,12 @@ void SerialPortAssistant::togglePort(bool open) {
     }
     else {
         processBinaryBuffer();
+        flushRealtimeFilter();
         m_frameParser.clear();
         serialPort->close();
         SerialPort_Number->setEnabled(true);
         SerialPort_BaudRate->setEnabled(true);
+        CheckBox_EnableFilter->setEnabled(Combo_Mode->currentIndex() == 3);
         stopCSVLogging();
         SerialPort_Connect->setEnabled(true);
         SerialPort_Disonnect->setEnabled(false);
@@ -314,7 +378,8 @@ void SerialPortAssistant::togglePort(bool open) {
 
 void SerialPortAssistant::clearAllData() {
     for (QLineSeries* series : seriesList) series->clear();
-    m_plotBuffer.clear();
+    m_rawPlotBuffer.clear();
+    m_filteredPlotBuffer.clear();
     clearMeasurement();
     SerialPort_ReceiveAear->appendPlainText(QString::fromUtf8("[System] Chart reset; acquisition time was preserved."));
 }
@@ -365,7 +430,7 @@ void SerialPortAssistant::startCSVLogging() {
 
     const QString filePath = createCSVFilePath();
     QString errorMessage;
-    if (!m_csvRecorder.start(filePath, &errorMessage)) {
+    if (!m_csvRecorder.start(filePath, m_realtimeFilter.isEnabled(), &errorMessage)) {
         Label_CSVStatus->setText(QString::fromUtf8("文件创建失败"));
         SerialPort_ReceiveAear->appendPlainText("[CSV Error] " + errorMessage + ": " + filePath);
         CheckBox_SaveCSV->setChecked(false);
@@ -491,6 +556,9 @@ void SerialPortAssistant::loadSettings() {
     Edit_YRightMax->setText(settings.value("plot/yRightMax", "2").toString());
     CheckBox_AutoScale->setChecked(settings.value("plot/autoScale", false).toBool());
     CheckBox_Crosshair->setChecked(settings.value("plot/crosshair", true).toBool());
+    CheckBox_EnableFilter->setChecked(settings.value("filter/enabled", true).toBool());
+    Combo_FilterDisplay->setCurrentIndex(
+        qBound(0, settings.value("filter/displayIndex", 0).toInt(), Combo_FilterDisplay->count() - 1));
     chartView->setCursorEnabled(CheckBox_Crosshair->isChecked());
     for (int channel = 0; channel < 3; ++channel) {
         CheckBox_ChannelVisible[channel]->setChecked(
@@ -530,6 +598,8 @@ void SerialPortAssistant::saveSettings() {
     settings.setValue("plot/yRightMax", Edit_YRightMax->text());
     settings.setValue("plot/autoScale", CheckBox_AutoScale->isChecked());
     settings.setValue("plot/crosshair", CheckBox_Crosshair->isChecked());
+    settings.setValue("filter/enabled", CheckBox_EnableFilter->isChecked());
+    settings.setValue("filter/displayIndex", Combo_FilterDisplay->currentIndex());
     for (int channel = 0; channel < 3; ++channel) {
         settings.setValue(
             QString("plot/channel%1Visible").arg(channel),
@@ -572,6 +642,8 @@ SerialPortAssistant::~SerialPortAssistant() {
         m_csvLoadWatcher->cancel();
         m_csvLoadWatcher->waitForFinished();
     }
+    processBinaryBuffer();
+    flushRealtimeFilter();
     stopCSVLogging();
     saveSettings();
 }

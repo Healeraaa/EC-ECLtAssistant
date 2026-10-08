@@ -31,6 +31,7 @@
 #include "ExperimentPreset.h"
 #include "PlotDataBuffer.h"
 #include "ProtocolFrameParser.h"
+#include "RealtimeSignalFilter.h"
 
 QT_CHARTS_USE_NAMESPACE
 
@@ -54,6 +55,11 @@ private:
     void sendConfig();
     void processBinaryBuffer();
     void processFrame(const ProtocolFrame& frame);
+    void handleRealtimeFilteredSamples(
+        const std::vector<RealtimeFilteredSample>& samples);
+    void flushRealtimeFilter();
+    PlotDataBuffer& displayPlotBuffer();
+    const PlotDataBuffer& displayPlotBuffer() const;
     void ensureSeriesCreated();
     void updatePlotSeries();
     void trimPlotBuffers();
@@ -105,7 +111,9 @@ private:
     QCheckBox* CheckBox_SaveCSV, * CheckBox_EnablePlot;
     QCheckBox* CheckBox_PausePlot, * CheckBox_AutoScale;
     QCheckBox* CheckBox_Crosshair, * CheckBox_Measurement;
+    QCheckBox* CheckBox_EnableFilter;
     QCheckBox* CheckBox_ChannelVisible[3];
+    QComboBox* Combo_FilterDisplay;
     QLineEdit* Edit_CSVDirectory;
     QLabel* Label_CSVStatus;
     QLabel* Label_ConnectionStatus;
@@ -144,8 +152,10 @@ private:
     QValueAxis* axisX, * axisY;
     QValueAxis* axisYRight;
     QList<QLineSeries*> seriesList;
-    PlotDataBuffer m_plotBuffer;
+    PlotDataBuffer m_rawPlotBuffer;
+    PlotDataBuffer m_filteredPlotBuffer;
     ProtocolFrameParser m_frameParser;
+    RealtimeSignalFilter m_realtimeFilter;
     QSerialPort* serialPort;
     QStringList lastPortList;
 

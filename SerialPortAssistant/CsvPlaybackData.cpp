@@ -1,11 +1,14 @@
 #include "CsvPlaybackData.h"
+#include "SignalFilterPipeline.h"
 
 #include <QFile>
 #include <QTextStream>
+#include <algorithm>
 #include <cmath>
 
 namespace {
 constexpr int kMaximumPlaybackRows = 2000000;
+constexpr int kMaximumAutoFilterRows = 500000;
 
 bool parseOptionalNumber(const QString& text, double* value)
 {
@@ -33,11 +36,29 @@ bool CsvPlaybackData::load(const QString& filePath, QString* errorMessage)
     QTextStream stream(&file);
     stream.setCodec("UTF-8");
 
-    const QString header = stream.readLine().trimmed();
-    if (!header.startsWith("Time(s),")) {
+    QString header = stream.readLine().trimmed();
+    if (!header.isEmpty() && header.front() == QChar::ByteOrderMark) header.remove(0, 1);
+    const QStringList headerColumns = header.split(',', Qt::KeepEmptyParts);
+    const int timeColumn = headerColumns.indexOf("Time(s)");
+    const int voltageColumn = headerColumns.indexOf("Voltage(V)");
+    const int currentColumn = headerColumns.indexOf("Current(A)");
+    const int opticalColumn = headerColumns.indexOf("OpticalSignal");
+    const int filteredVoltageColumn = headerColumns.indexOf("VoltageFiltered(V)");
+    const int filteredCurrentColumn = headerColumns.indexOf("CurrentFiltered(A)");
+    const int filteredOpticalColumn = headerColumns.indexOf("OpticalSignalFiltered");
+    const int filterValidColumn = headerColumns.indexOf("FilterValid");
+    const int gpciEventColumn = headerColumns.indexOf("GPCIEvent");
+    if (timeColumn < 0 || voltageColumn < 0 || currentColumn < 0 || opticalColumn < 0) {
         if (errorMessage) *errorMessage = QString::fromUtf8("CSV 表头格式不受支持。");
         return false;
     }
+    const bool hasFilteredColumns = filteredVoltageColumn >= 0
+        && filteredCurrentColumn >= 0
+        && filteredOpticalColumn >= 0;
+    const int requiredColumn = std::max(
+        { timeColumn, voltageColumn, currentColumn, opticalColumn,
+          filteredVoltageColumn, filteredCurrentColumn, filteredOpticalColumn,
+          filterValidColumn, gpciEventColumn });
 
     double previousTime = 0.0;
     bool hasPreviousTime = false;
@@ -48,7 +69,7 @@ bool CsvPlaybackData::load(const QString& filePath, QString* errorMessage)
         if (line.isEmpty()) continue;
 
         const QStringList columns = line.split(',', Qt::KeepEmptyParts);
-        if (columns.size() < 4) {
+        if (columns.size() <= requiredColumn) {
             if (errorMessage) {
                 *errorMessage = QString::fromUtf8("第 %1 行列数不足。").arg(lineNumber);
             }
@@ -56,7 +77,7 @@ bool CsvPlaybackData::load(const QString& filePath, QString* errorMessage)
         }
 
         bool timeOk = false;
-        const double time = columns.at(0).toDouble(&timeOk);
+        const double time = columns.at(timeColumn).toDouble(&timeOk);
         if (!timeOk || !std::isfinite(time)) {
             if (errorMessage) {
                 *errorMessage = QString::fromUtf8("第 %1 行时间值无效。").arg(lineNumber);
@@ -72,9 +93,17 @@ bool CsvPlaybackData::load(const QString& filePath, QString* errorMessage)
 
         CsvPlaybackRow row;
         row.timeSeconds = time;
-        row.hasVoltage = parseOptionalNumber(columns.at(1), &row.voltage);
-        row.hasCurrent = parseOptionalNumber(columns.at(2), &row.current);
-        row.hasOptical = parseOptionalNumber(columns.at(3), &row.optical);
+        row.hasVoltage = parseOptionalNumber(columns.at(voltageColumn), &row.voltage);
+        row.hasCurrent = parseOptionalNumber(columns.at(currentColumn), &row.current);
+        row.hasOptical = parseOptionalNumber(columns.at(opticalColumn), &row.optical);
+        if (hasFilteredColumns) {
+            row.hasFiltered = parseOptionalNumber(
+                columns.at(filteredVoltageColumn), &row.filteredVoltage)
+                && parseOptionalNumber(columns.at(filteredCurrentColumn), &row.filteredCurrent)
+                && parseOptionalNumber(columns.at(filteredOpticalColumn), &row.filteredOptical);
+            if (filterValidColumn >= 0) row.filterValid = columns.at(filterValidColumn).toInt() != 0;
+            if (gpciEventColumn >= 0) row.gpciEvent = columns.at(gpciEventColumn).toInt() != 0;
+        }
         if (row.hasVoltage || row.hasCurrent || row.hasOptical) {
             loadedRows.append(row);
         }
@@ -94,8 +123,44 @@ bool CsvPlaybackData::load(const QString& filePath, QString* errorMessage)
         return false;
     }
 
+    bool filteredDataAvailable = std::any_of(
+        loadedRows.cbegin(), loadedRows.cend(),
+        [](const CsvPlaybackRow& row) { return row.hasFiltered; });
+    if (!filteredDataAvailable
+        && loadedRows.size() >= 2
+        && loadedRows.size() <= kMaximumAutoFilterRows) {
+        const double duration = loadedRows.last().timeSeconds - loadedRows.first().timeSeconds;
+        const double averageInterval = duration / static_cast<double>(loadedRows.size() - 1);
+        const bool isHundredHertz = averageInterval >= 0.009 && averageInterval <= 0.011;
+        const bool hasCompleteRows = std::all_of(
+            loadedRows.cbegin(), loadedRows.cend(),
+            [](const CsvPlaybackRow& row) {
+                return row.hasVoltage && row.hasCurrent && row.hasOptical;
+            });
+        if (isHundredHertz && hasCompleteRows) {
+            std::vector<SignalFilterSample> samples;
+            samples.reserve(static_cast<std::size_t>(loadedRows.size()));
+            for (const CsvPlaybackRow& row : loadedRows) {
+                samples.push_back({ row.timeSeconds, row.voltage, row.current, row.optical });
+            }
+            const SignalFilterBatchResult filtered = SignalFilterPipeline().process(samples);
+            for (int index = 0; index < loadedRows.size(); ++index) {
+                CsvPlaybackRow& row = loadedRows[index];
+                const SignalFilterResult& result = filtered.samples[static_cast<std::size_t>(index)];
+                row.filteredVoltage = result.voltage;
+                row.filteredCurrent = result.current;
+                row.filteredOptical = result.optical;
+                row.hasFiltered = true;
+                row.filterValid = result.filterValid;
+                row.gpciEvent = result.gpciEvent;
+            }
+            filteredDataAvailable = true;
+        }
+    }
+
     m_rows.swap(loadedRows);
     m_filePath = filePath;
+    m_hasFilteredData = filteredDataAvailable;
     return true;
 }
 
@@ -103,6 +168,7 @@ void CsvPlaybackData::clear()
 {
     m_rows.clear();
     m_filePath.clear();
+    m_hasFilteredData = false;
 }
 
 double CsvPlaybackData::firstTime() const

@@ -20,6 +20,7 @@ QString formatRate(double bytesPerSecond)
 
 void SerialPortAssistant::updateStatusPanel()
 {
+    const PlotDataBuffer& plotBuffer = displayPlotBuffer();
     const qint64 elapsedMilliseconds = std::max<qint64>(1, m_dataRateTimer.restart());
     const quint64 byteDelta = m_receivedBytes - m_lastStatusBytes;
     const double bytesPerSecond = byteDelta * 1000.0 / elapsedMilliseconds;
@@ -61,14 +62,14 @@ void SerialPortAssistant::updateStatusPanel()
         QString::fromUtf8("绘图 %1 点 | %2 ms | 缓存 %3/%4/%5")
             .arg(m_lastRenderedPoints)
             .arg(m_lastPlotRenderMilliseconds, 0, 'f', 1)
-            .arg(m_plotBuffer.pointCount(0))
-            .arg(m_plotBuffer.pointCount(1))
-            .arg(m_plotBuffer.pointCount(2)));
+            .arg(plotBuffer.pointCount(0))
+            .arg(plotBuffer.pointCount(1))
+            .arg(plotBuffer.pointCount(2)));
 
     QStringList peakParts;
-    const PlotChannelStatistics& voltage = m_plotBuffer.statistics(0);
-    const PlotChannelStatistics& current = m_plotBuffer.statistics(1);
-    const PlotChannelStatistics& optical = m_plotBuffer.statistics(2);
+    const PlotChannelStatistics& voltage = plotBuffer.statistics(0);
+    const PlotChannelStatistics& current = plotBuffer.statistics(1);
+    const PlotChannelStatistics& optical = plotBuffer.statistics(2);
     if (voltage.hasValue) {
         peakParts << QString("V [%1, %2]")
             .arg(voltage.minimum, 0, 'g', 6)

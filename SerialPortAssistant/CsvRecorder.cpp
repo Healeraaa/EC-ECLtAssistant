@@ -10,6 +10,14 @@ constexpr int kRowsKeptWhenStreamLags = 5000;
 
 bool CsvRecorder::start(const QString& filePath, QString* errorMessage)
 {
+    return start(filePath, false, errorMessage);
+}
+
+bool CsvRecorder::start(
+    const QString& filePath,
+    bool includeFilteredColumns,
+    QString* errorMessage)
+{
     if (isRecording()) {
         return true;
     }
@@ -25,12 +33,20 @@ bool CsvRecorder::start(const QString& filePath, QString* errorMessage)
     m_stream.setDevice(&m_file);
     m_stream.resetStatus();
     m_stream.setCodec("UTF-8");
-    m_stream << "Time(s),Voltage(V),Current(A),OpticalSignal\n";
+    m_includeFilteredColumns = includeFilteredColumns;
+    m_stream << "Time(s),Voltage(V),Current(A),OpticalSignal";
+    if (m_includeFilteredColumns) {
+        m_stream << ",VoltageFiltered(V),CurrentFiltered(A),OpticalSignalFiltered,"
+            "FilterValid,GPCIEvent";
+    }
+    m_stream << '\n';
     m_pendingRows.clear();
     m_latestIvKey = 0;
     m_latestLightKey = 0;
+    m_latestFilteredKey = 0;
     m_hasIv = false;
     m_hasLight = false;
+    m_hasFiltered = false;
     m_rowsWritten = 0;
     return true;
 }
@@ -64,8 +80,10 @@ bool CsvRecorder::flush(QString* errorMessage)
     }
 
     bool succeeded = true;
-    if (m_hasIv && m_hasLight) {
-        succeeded = writeRowsUpTo(qMin(m_latestIvKey, m_latestLightKey), errorMessage);
+    if (m_hasIv && m_hasLight && (!m_includeFilteredColumns || m_hasFiltered)) {
+        qint64 completeThrough = qMin(m_latestIvKey, m_latestLightKey);
+        if (m_includeFilteredColumns) completeThrough = qMin(completeThrough, m_latestFilteredKey);
+        succeeded = writeRowsUpTo(completeThrough, errorMessage);
     }
 
     if (succeeded && m_pendingRows.size() > kMaximumPendingRows) {
@@ -117,6 +135,34 @@ void CsvRecorder::appendLight(double timeSeconds, double opticalSignal)
     m_hasLight = true;
 }
 
+void CsvRecorder::appendFiltered(
+    double timeSeconds,
+    double voltage,
+    double current,
+    double opticalSignal,
+    bool filterValid,
+    bool gpciEvent)
+{
+    if (!m_includeFilteredColumns
+        || !std::isfinite(voltage)
+        || !std::isfinite(current)
+        || !std::isfinite(opticalSignal)) {
+        return;
+    }
+    const qint64 key = timeKey(timeSeconds);
+    auto iterator = m_pendingRows.find(key);
+    if (iterator == m_pendingRows.end()) return;
+    CsvRow& row = iterator.value();
+    row.filteredVoltage = voltage;
+    row.filteredCurrent = current;
+    row.filteredOptical = opticalSignal;
+    row.filterValid = filterValid;
+    row.gpciEvent = gpciEvent;
+    row.hasFiltered = true;
+    m_latestFilteredKey = qMax(m_latestFilteredKey, key);
+    m_hasFiltered = true;
+}
+
 qint64 CsvRecorder::timeKey(double timeSeconds)
 {
     return qRound64(timeSeconds * 1000000.0);
@@ -138,6 +184,22 @@ bool CsvRecorder::writeRowsUpTo(qint64 inclusiveKey, QString* errorMessage)
         m_stream << ',';
         if (row.hasOptical) {
             m_stream << QString::number(row.optical, 'f', 6);
+        }
+        if (m_includeFilteredColumns) {
+            m_stream << ',';
+            if (row.hasFiltered) {
+                m_stream << QString::number(row.filteredVoltage, 'f', 9);
+            }
+            m_stream << ',';
+            if (row.hasFiltered) {
+                m_stream << QString::number(row.filteredCurrent, 'f', 9);
+            }
+            m_stream << ',';
+            if (row.hasFiltered) {
+                m_stream << QString::number(row.filteredOptical, 'f', 9);
+            }
+            m_stream << ',' << (row.hasFiltered && row.filterValid ? 1 : 0)
+                << ',' << (row.hasFiltered && row.gpciEvent ? 1 : 0);
         }
         m_stream << '\n';
         ++m_rowsWritten;

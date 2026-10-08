@@ -57,10 +57,11 @@ void SerialPortAssistant::updatePlotSeries()
     if (renderPointLimit <= 0) renderPointLimit = 4000;
     renderPointLimit = qBound(200, renderPointLimit, 20000);
     m_lastRenderedPoints = 0;
+    const PlotDataBuffer& plotBuffer = displayPlotBuffer();
     for (int channel = 0; channel < PlotDataBuffer::ChannelCount; ++channel) {
         if (channel < seriesList.size() && CheckBox_ChannelVisible[channel]->isChecked()) {
             const QVector<QPointF> displayPoints =
-                m_plotBuffer.decimatedPoints(channel, renderPointLimit);
+                plotBuffer.decimatedPoints(channel, renderPointLimit);
             m_lastRenderedPoints += displayPoints.size();
             seriesList[channel]->replace(displayPoints);
         }
@@ -76,7 +77,9 @@ void SerialPortAssistant::trimPlotBuffers()
 {
     int displayPointCount = Edit_XRange->text().toInt();
     if (displayPointCount <= 0) displayPointCount = 100;
-    m_plotBuffer.trim(qMin(displayPointCount, 50000));
+    const int maximumPoints = qMin(displayPointCount, 50000);
+    m_rawPlotBuffer.trim(maximumPoints);
+    m_filteredPlotBuffer.trim(maximumPoints);
 }
 
 void SerialPortAssistant::applyManualAxisRanges()
@@ -102,7 +105,7 @@ void SerialPortAssistant::fitChartToData()
         visibleChannels[channel] = CheckBox_ChannelVisible[channel]->isChecked();
     }
 
-    const PlotDataRange range = m_plotBuffer.range(visibleChannels);
+    const PlotDataRange range = displayPlotBuffer().range(visibleChannels);
     if (range.hasX) setPaddedRange(axisX, range.xMinimum, range.xMaximum);
     if (range.hasLeftAxis) {
         setPaddedRange(axisY, range.leftMinimum, range.leftMaximum);
@@ -135,7 +138,7 @@ void SerialPortAssistant::handleChartCursor(const QPointF& position)
     for (int channel = 0; channel < PlotDataBuffer::ChannelCount; ++channel) {
         if (!CheckBox_ChannelVisible[channel]->isChecked()) continue;
         QPointF nearest;
-        if (m_plotBuffer.nearestPoint(channel, time, &nearest)) {
+        if (displayPlotBuffer().nearestPoint(channel, time, &nearest)) {
             values << QString("%1=%2").arg(channelNames[channel]).arg(nearest.y(), 0, 'g', 7);
         }
     }
@@ -153,7 +156,7 @@ void SerialPortAssistant::handleChartClick(const QPointF& position)
     selected.timeSeconds = axisX->min() + ratio * (axisX->max() - axisX->min());
     for (int channel = 0; channel < PlotDataBuffer::ChannelCount; ++channel) {
         QPointF nearest;
-        if (m_plotBuffer.nearestPoint(channel, selected.timeSeconds, &nearest)) {
+        if (displayPlotBuffer().nearestPoint(channel, selected.timeSeconds, &nearest)) {
             selected.hasValue[channel] = true;
             selected.values[channel] = nearest.y();
             selected.valid = true;
