@@ -104,6 +104,7 @@
     <ClInclude Include="ExperimentPreset.h" />
     <ClInclude Include="PlotDataBuffer.h" />
     <ClInclude Include="ProtocolFrameParser.h" />
+    <ClInclude Include="PulseAreaAnalyzer.h" />
     <ClInclude Include="RealtimeSignalFilter.h" />
     <ClInclude Include="SignalFilterPipeline.h" />
     <ClCompile Include="ChartInteractionView.cpp" />
@@ -112,11 +113,13 @@
     <ClCompile Include="ExperimentPreset.cpp" />
     <ClCompile Include="PlotDataBuffer.cpp" />
     <ClCompile Include="ProtocolFrameParser.cpp" />
+    <ClCompile Include="PulseAreaAnalyzer.cpp" />
     <ClCompile Include="RealtimeSignalFilter.cpp" />
     <ClCompile Include="SignalFilterPipeline.cpp" />
     <ClCompile Include="SerialPortAssistant.cpp" />
     <ClCompile Include="SerialPortAssistantPlayback.cpp" />
     <ClCompile Include="SerialPortAssistantPlot.cpp" />
+    <ClCompile Include="SerialPortAssistantPulse.cpp" />
     <ClCompile Include="SerialPortAssistantPreset.cpp" />
     <ClCompile Include="SerialPortAssistantStatus.cpp" />
     <ClCompile Include="SerialPortAssistantUi.cpp" />
@@ -128,6 +131,7 @@
     <None Include="tests\ExperimentPresetTests.cpp" />
     <None Include="tests\PlotDataBufferTests.cpp" />
     <None Include="tests\ProtocolFrameParserTests.cpp" />
+    <None Include="tests\PulseAreaAnalyzerTests.cpp" />
     <None Include="tests\RealtimeSignalFilterTests.cpp" />
     <None Include="tests\RealtimeCsvPipelineTests.cpp" />
     <None Include="tests\SignalFilterPipelineTests.cpp" />

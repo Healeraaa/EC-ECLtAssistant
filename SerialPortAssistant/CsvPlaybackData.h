@@ -4,6 +4,8 @@
 #include <QString>
 #include <QVector>
 
+#include "PulseAreaAnalyzer.h"
+
 struct CsvPlaybackRow
 {
     double timeSeconds = 0.0;
@@ -31,6 +33,7 @@ public:
     QString filePath() const { return m_filePath; }
     bool isEmpty() const { return m_rows.isEmpty(); }
     bool hasFilteredData() const { return m_hasFilteredData; }
+    const QVector<PulseAreaMeasurement>& pulses() const { return m_pulses; }
     double firstTime() const;
     double lastTime() const;
     double duration() const;
@@ -39,6 +42,7 @@ private:
     QVector<CsvPlaybackRow> m_rows;
     QString m_filePath;
     bool m_hasFilteredData = false;
+    QVector<PulseAreaMeasurement> m_pulses;
 };
 
 struct CsvPlaybackLoadResult

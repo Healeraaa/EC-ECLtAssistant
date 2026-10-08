@@ -158,7 +158,38 @@ bool CsvPlaybackData::load(const QString& filePath, QString* errorMessage)
         }
     }
 
+    QVector<PulseAreaMeasurement> loadedPulses;
+    if (filteredDataAvailable) {
+        PulseAreaAnalyzer analyzer;
+        for (const CsvPlaybackRow& row : loadedRows) {
+            if (!row.hasVoltage || !row.hasCurrent || !row.hasOptical || !row.hasFiltered) {
+                analyzer.reset();
+                continue;
+            }
+            const SignalFilterSample raw {
+                row.timeSeconds,
+                row.voltage,
+                row.current,
+                row.optical
+            };
+            const SignalFilterResult filtered {
+                row.filteredVoltage,
+                row.filteredCurrent,
+                row.filteredOptical,
+                row.filterValid,
+                row.gpciEvent
+            };
+            PulseAreaMeasurement completed;
+            if (analyzer.process(raw, filtered, &completed)) {
+                loadedPulses.append(completed);
+            }
+        }
+        PulseAreaMeasurement incomplete;
+        if (analyzer.flush(&incomplete)) loadedPulses.append(incomplete);
+    }
+
     m_rows.swap(loadedRows);
+    m_pulses.swap(loadedPulses);
     m_filePath = filePath;
     m_hasFilteredData = filteredDataAvailable;
     return true;
@@ -169,6 +200,7 @@ void CsvPlaybackData::clear()
     m_rows.clear();
     m_filePath.clear();
     m_hasFilteredData = false;
+    m_pulses.clear();
 }
 
 double CsvPlaybackData::firstTime() const

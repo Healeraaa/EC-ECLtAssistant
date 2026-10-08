@@ -3,10 +3,55 @@
 #include <QFile>
 #include <QTemporaryDir>
 #include <QTextStream>
+#include <cmath>
 #include <iostream>
 
-int main()
+int wmain(int argc, wchar_t* argv[])
 {
+    if (argc > 1) {
+        for (int argumentIndex = 1; argumentIndex < argc; ++argumentIndex) {
+            CsvPlaybackData inspectedData;
+            QString inspectedError;
+            const QString inspectedPath = QString::fromWCharArray(argv[argumentIndex]);
+            if (!inspectedData.load(inspectedPath, &inspectedError)) {
+                std::cerr << "FAILED: " << inspectedError.toStdString() << '\n';
+                return 1;
+            }
+
+            int validCount = 0;
+            double areaSum = 0.0;
+            double squaredDeviationSum = 0.0;
+            QVector<double> validAreas;
+            for (const PulseAreaMeasurement& pulse : inspectedData.pulses()) {
+                if (!pulse.valid) continue;
+                validAreas.append(pulse.filteredArea);
+                areaSum += pulse.filteredArea;
+                ++validCount;
+            }
+            const double mean = validCount > 0 ? areaSum / validCount : 0.0;
+            for (const double area : validAreas) {
+                const double deviation = area - mean;
+                squaredDeviationSum += deviation * deviation;
+            }
+            const double standardDeviation = validCount > 1
+                ? std::sqrt(squaredDeviationSum / (validCount - 1))
+                : 0.0;
+            const double coefficientOfVariation = std::abs(mean) > 1e-12
+                ? standardDeviation / std::abs(mean) * 100.0
+                : 0.0;
+            const double latestArea = validAreas.isEmpty() ? 0.0 : validAreas.back();
+
+            std::wcout << L"File: " << argv[argumentIndex] << L'\n';
+            std::cout << "Rows=" << inspectedData.rows().size()
+                      << ", Pulses=" << inspectedData.pulses().size()
+                      << ", Valid=" << validCount
+                      << ", Latest=" << latestArea
+                      << ", Mean=" << mean
+                      << ", CV=" << coefficientOfVariation << "%\n";
+        }
+        return 0;
+    }
+
     QTemporaryDir temporaryDirectory;
     if (!temporaryDirectory.isValid()) return 1;
 
@@ -70,7 +115,9 @@ int main()
     if (!data.load(rawGpciPath, &errorMessage)
         || !data.hasFilteredData()
         || !data.rows().at(102).hasFiltered
-        || !data.rows().at(102).gpciEvent) {
+        || !data.rows().at(102).gpciEvent
+        || data.pulses().size() != 1
+        || !data.pulses().front().valid) {
         std::cerr << "FAILED: raw 100 Hz GPCI file was not auto-filtered\n";
         return 1;
     }

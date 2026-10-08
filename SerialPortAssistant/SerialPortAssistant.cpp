@@ -276,6 +276,17 @@ void SerialPortAssistant::handleRealtimeFilteredSamples(
                 sample.filtered.filterValid,
                 sample.filtered.gpciEvent);
         }
+        PulseAreaMeasurement completedPulse;
+        if (m_pulseAreaAnalyzer.process(
+                sample.raw,
+                sample.filtered,
+                &completedPulse)) {
+            m_pulseSummaries.append(completedPulse);
+            if (m_csvRecorder.isRecording()) {
+                m_recordedPulseSummaries.append(completedPulse);
+            }
+            updatePulseAreaStatus();
+        }
     }
 }
 
@@ -325,6 +336,7 @@ void SerialPortAssistant::togglePort(bool open) {
             m_realtimeFilter.reset();
             m_realtimeFilter.setEnabled(
                 Combo_Mode->currentIndex() == 3 && CheckBox_EnableFilter->isChecked());
+            resetPulseAreaResults();
             clearMeasurement();
 
             ivSamplingRate = 0;
@@ -358,6 +370,7 @@ void SerialPortAssistant::togglePort(bool open) {
     else {
         processBinaryBuffer();
         flushRealtimeFilter();
+        flushPulseAreaAnalyzer();
         m_frameParser.clear();
         serialPort->close();
         SerialPort_Number->setEnabled(true);
@@ -437,6 +450,8 @@ void SerialPortAssistant::startCSVLogging() {
         return;
     }
 
+    m_recordedPulseSummaries.clear();
+
     m_csvFlushTimer->start(1000);
     Label_CSVStatus->setText(QString::fromUtf8("正在记录：") + QDir::toNativeSeparators(filePath));
     SerialPort_ReceiveAear->appendPlainText("[CSV] Started logging to " + QDir::toNativeSeparators(filePath));
@@ -451,12 +466,24 @@ void SerialPortAssistant::stopCSVLogging() {
     const quint64 rowCount = m_csvRecorder.rowsWritten() + static_cast<quint64>(m_csvRecorder.pendingRows());
     QString errorMessage;
     const bool succeeded = m_csvRecorder.stop(&errorMessage);
+    QString pulseSummaryPath;
+    QString pulseSummaryError;
+    const bool pulseSummarySucceeded = !m_realtimeFilter.isEnabled()
+        || writePulseSummaryFile(filePath, &pulseSummaryPath, &pulseSummaryError);
 
     if (succeeded) {
         Label_CSVStatus->setText(
             QString::fromUtf8("已保存 %1 行：%2").arg(rowCount).arg(QDir::toNativeSeparators(filePath)));
         SerialPort_ReceiveAear->appendPlainText(
             QString("[CSV] Saved %1 rows to %2").arg(rowCount).arg(QDir::toNativeSeparators(filePath)));
+        if (m_realtimeFilter.isEnabled() && pulseSummarySucceeded) {
+            SerialPort_ReceiveAear->appendPlainText(
+                "[CSV] Pulse summary: " + QDir::toNativeSeparators(pulseSummaryPath));
+        }
+        else if (!pulseSummarySucceeded) {
+            SerialPort_ReceiveAear->appendPlainText(
+                "[CSV Error] Pulse summary: " + pulseSummaryError);
+        }
     }
     else {
         Label_CSVStatus->setText(QString::fromUtf8("保存失败：") + errorMessage);
@@ -644,6 +671,7 @@ SerialPortAssistant::~SerialPortAssistant() {
     }
     processBinaryBuffer();
     flushRealtimeFilter();
+    flushPulseAreaAnalyzer();
     stopCSVLogging();
     saveSettings();
 }

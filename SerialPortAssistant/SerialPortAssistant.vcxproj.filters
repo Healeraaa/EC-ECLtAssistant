@@ -56,6 +56,9 @@
     <ClInclude Include="ProtocolFrameParser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="PulseAreaAnalyzer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="RealtimeSignalFilter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -80,6 +83,9 @@
     <ClCompile Include="ProtocolFrameParser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="PulseAreaAnalyzer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="RealtimeSignalFilter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -93,6 +99,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SerialPortAssistantPlot.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SerialPortAssistantPulse.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SerialPortAssistantPreset.cpp">
@@ -130,6 +139,9 @@
       <Filter>Test Files</Filter>
     </None>
     <None Include="tests\ProtocolFrameParserTests.cpp">
+      <Filter>Test Files</Filter>
+    </None>
+    <None Include="tests\PulseAreaAnalyzerTests.cpp">
       <Filter>Test Files</Filter>
     </None>
     <None Include="tests\RealtimeSignalFilterTests.cpp">

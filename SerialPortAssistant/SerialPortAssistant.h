@@ -58,6 +58,13 @@ private:
     void handleRealtimeFilteredSamples(
         const std::vector<RealtimeFilteredSample>& samples);
     void flushRealtimeFilter();
+    void resetPulseAreaResults();
+    void flushPulseAreaAnalyzer();
+    void updatePulseAreaStatus();
+    bool writePulseSummaryFile(
+        const QString& dataFilePath,
+        QString* summaryFilePath,
+        QString* errorMessage) const;
     PlotDataBuffer& displayPlotBuffer();
     const PlotDataBuffer& displayPlotBuffer() const;
     void ensureSeriesCreated();
@@ -121,6 +128,7 @@ private:
     QLabel* Label_FrameStatus;
     QLabel* Label_SampleStatus;
     QLabel* Label_PeakStatus;
+    QLabel* Label_PulseAreaStatus;
     QLabel* Label_RenderStatus;
     QLabel* Label_PlaybackFile;
     QLabel* Label_CursorReadout;
@@ -156,6 +164,9 @@ private:
     PlotDataBuffer m_filteredPlotBuffer;
     ProtocolFrameParser m_frameParser;
     RealtimeSignalFilter m_realtimeFilter;
+    PulseAreaAnalyzer m_pulseAreaAnalyzer;
+    QVector<PulseAreaMeasurement> m_pulseSummaries;
+    QVector<PulseAreaMeasurement> m_recordedPulseSummaries;
     QSerialPort* serialPort;
     QStringList lastPortList;
 

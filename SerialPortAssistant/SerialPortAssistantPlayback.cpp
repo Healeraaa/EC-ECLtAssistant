@@ -58,6 +58,10 @@ void SerialPortAssistant::finishCSVPlaybackLoad()
     }
 
     m_playbackData = result.data;
+    m_pulseAreaAnalyzer.reset();
+    m_pulseSummaries = m_playbackData.pulses();
+    m_recordedPulseSummaries.clear();
+    updatePulseAreaStatus();
 
     m_frameParser.clear();
     m_lastStatusFrames = 0;
