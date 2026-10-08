@@ -98,6 +98,22 @@ void SerialPortAssistant::setupConnections() {
         }
         updateStatusPanel();
     });
+    const auto qualityThresholdChanged = [this](double) {
+        applyPulseQualityThresholds();
+        saveSettings();
+    };
+    connect(
+        Spin_MaxAreaDifference,
+        QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+        qualityThresholdChanged);
+    connect(
+        Spin_MinNoiseReduction,
+        QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+        qualityThresholdChanged);
+    connect(
+        Spin_MinSnrImprovement,
+        QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+        qualityThresholdChanged);
     connect(Btn_FitChart, &QPushButton::clicked, this, &SerialPortAssistant::fitChartToData);
     connect(Btn_ResetZoom, &QPushButton::clicked, this, &SerialPortAssistant::resetChartZoom);
     connect(Btn_ExportChart, &QPushButton::clicked, this, &SerialPortAssistant::exportChartImage);
@@ -282,7 +298,8 @@ void SerialPortAssistant::handleRealtimeFilteredSamples(
                 sample.filtered,
                 &completedPulse)) {
             m_pulseSummaries.append(completedPulse);
-            if (m_csvRecorder.isRecording()) {
+            if (m_csvRecorder.isRecording()
+                && completedPulse.index >= m_recordingFirstPulseIndex) {
                 m_recordedPulseSummaries.append(completedPulse);
             }
             updatePulseAreaStatus();
@@ -357,6 +374,7 @@ void SerialPortAssistant::togglePort(bool open) {
             SerialPort_Number->setEnabled(false);
             SerialPort_BaudRate->setEnabled(false);
             CheckBox_EnableFilter->setEnabled(false);
+            setPulseQualityControlsEnabled(false);
             SerialPort_Connect->setEnabled(false);
             SerialPort_Disonnect->setEnabled(true);
             SerialPort_Send->setEnabled(true);
@@ -377,6 +395,7 @@ void SerialPortAssistant::togglePort(bool open) {
         SerialPort_BaudRate->setEnabled(true);
         CheckBox_EnableFilter->setEnabled(Combo_Mode->currentIndex() == 3);
         stopCSVLogging();
+        setPulseQualityControlsEnabled(true);
         SerialPort_Connect->setEnabled(true);
         SerialPort_Disonnect->setEnabled(false);
         SerialPort_Send->setEnabled(false);
@@ -451,6 +470,7 @@ void SerialPortAssistant::startCSVLogging() {
     }
 
     m_recordedPulseSummaries.clear();
+    m_recordingFirstPulseIndex = m_pulseAreaAnalyzer.nextPulseIndex();
 
     m_csvFlushTimer->start(1000);
     Label_CSVStatus->setText(QString::fromUtf8("正在记录：") + QDir::toNativeSeparators(filePath));
@@ -462,6 +482,7 @@ void SerialPortAssistant::stopCSVLogging() {
     if (!m_csvRecorder.isRecording()) return;
 
     m_csvFlushTimer->stop();
+    captureRecordingIncompletePulse();
     const QString filePath = m_csvRecorder.filePath();
     const quint64 rowCount = m_csvRecorder.rowsWritten() + static_cast<quint64>(m_csvRecorder.pendingRows());
     QString errorMessage;
@@ -469,7 +490,8 @@ void SerialPortAssistant::stopCSVLogging() {
     QString pulseSummaryPath;
     QString pulseSummaryError;
     const bool pulseSummarySucceeded = !m_realtimeFilter.isEnabled()
-        || writePulseSummaryFile(filePath, &pulseSummaryPath, &pulseSummaryError);
+        || (succeeded
+            && writePulseSummaryFile(filePath, &pulseSummaryPath, &pulseSummaryError));
 
     if (succeeded) {
         Label_CSVStatus->setText(
@@ -584,6 +606,13 @@ void SerialPortAssistant::loadSettings() {
     CheckBox_AutoScale->setChecked(settings.value("plot/autoScale", false).toBool());
     CheckBox_Crosshair->setChecked(settings.value("plot/crosshair", true).toBool());
     CheckBox_EnableFilter->setChecked(settings.value("filter/enabled", true).toBool());
+    Spin_MaxAreaDifference->setValue(
+        settings.value("filter/quality/maxAreaDifferencePercent", 5.0).toDouble());
+    Spin_MinNoiseReduction->setValue(
+        settings.value("filter/quality/minNoiseReductionPercent", 0.0).toDouble());
+    Spin_MinSnrImprovement->setValue(
+        settings.value("filter/quality/minSnrImprovementDb", 0.0).toDouble());
+    m_pulseAreaAnalyzer.setQualityThresholds(currentPulseQualityThresholds());
     Combo_FilterDisplay->setCurrentIndex(
         qBound(0, settings.value("filter/displayIndex", 0).toInt(), Combo_FilterDisplay->count() - 1));
     chartView->setCursorEnabled(CheckBox_Crosshair->isChecked());
@@ -626,6 +655,15 @@ void SerialPortAssistant::saveSettings() {
     settings.setValue("plot/autoScale", CheckBox_AutoScale->isChecked());
     settings.setValue("plot/crosshair", CheckBox_Crosshair->isChecked());
     settings.setValue("filter/enabled", CheckBox_EnableFilter->isChecked());
+    settings.setValue(
+        "filter/quality/maxAreaDifferencePercent",
+        Spin_MaxAreaDifference->value());
+    settings.setValue(
+        "filter/quality/minNoiseReductionPercent",
+        Spin_MinNoiseReduction->value());
+    settings.setValue(
+        "filter/quality/minSnrImprovementDb",
+        Spin_MinSnrImprovement->value());
     settings.setValue("filter/displayIndex", Combo_FilterDisplay->currentIndex());
     for (int channel = 0; channel < 3; ++channel) {
         settings.setValue(

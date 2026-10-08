@@ -124,7 +124,9 @@ int wmain(int argc, wchar_t* argv[])
         rawGpciStream << QString::number(index * 0.01, 'f', 6) << ','
                       << (index >= 100 && index <= 105 ? "1.3" : "-0.00048") << ','
                       << (index == 100 ? "8.0" : (index == 105 ? "-9.0" : "-0.009")) << ','
-                      << (index >= 101 && index <= 105 ? "5000" : "350") << '\n';
+                      << (index >= 101 && index <= 105
+                          ? "5000"
+                          : (index % 2 == 0 ? "340" : "360")) << '\n';
     }
     rawGpciFile.close();
     if (!data.load(rawGpciPath, &errorMessage)
@@ -132,8 +134,17 @@ int wmain(int argc, wchar_t* argv[])
         || !data.rows().at(102).hasFiltered
         || !data.rows().at(102).gpciEvent
         || data.pulses().size() != 1
-        || !data.pulses().front().valid) {
+        || !data.pulses().front().valid
+        || !data.pulses().front().qualityEvaluated) {
         std::cerr << "FAILED: raw 100 Hz GPCI file was not auto-filtered\n";
+        return 1;
+    }
+    PulseQualityThresholds strictThresholds;
+    strictThresholds.minimumSnrImprovementDb = 60.0;
+    if (!data.load(rawGpciPath, &errorMessage, strictThresholds)
+        || data.pulses().isEmpty()
+        || !data.pulses().front().qualityWarning) {
+        std::cerr << "FAILED: playback quality thresholds were not applied\n";
         return 1;
     }
 

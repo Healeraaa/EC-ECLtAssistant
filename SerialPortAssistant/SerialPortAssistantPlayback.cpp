@@ -37,7 +37,10 @@ bool SerialPortAssistant::openCSVForPlayback(const QString& filePath)
     Slider_Playback->setEnabled(false);
     Label_PlaybackFile->setText(
         QString::fromUtf8("正在后台加载：%1").arg(QFileInfo(filePath).fileName()));
-    m_csvLoadWatcher->setFuture(QtConcurrent::run(loadCsvPlaybackFile, filePath));
+    const PulseQualityThresholds thresholds = currentPulseQualityThresholds();
+    m_csvLoadWatcher->setFuture(QtConcurrent::run([filePath, thresholds]() {
+        return loadCsvPlaybackFile(filePath, thresholds);
+    }));
     return true;
 }
 
@@ -61,7 +64,7 @@ void SerialPortAssistant::finishCSVPlaybackLoad()
     m_pulseAreaAnalyzer.reset();
     m_pulseSummaries = m_playbackData.pulses();
     m_recordedPulseSummaries.clear();
-    updatePulseAreaStatus();
+    applyPulseQualityThresholds();
 
     m_frameParser.clear();
     m_lastStatusFrames = 0;

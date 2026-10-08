@@ -26,7 +26,10 @@ struct CsvPlaybackRow
 class CsvPlaybackData
 {
 public:
-    bool load(const QString& filePath, QString* errorMessage = nullptr);
+    bool load(
+        const QString& filePath,
+        QString* errorMessage = nullptr,
+        const PulseQualityThresholds& qualityThresholds = {});
     void clear();
 
     const QVector<CsvPlaybackRow>& rows() const { return m_rows; }
@@ -53,5 +56,8 @@ struct CsvPlaybackLoadResult
 };
 
 CsvPlaybackLoadResult loadCsvPlaybackFile(const QString& filePath);
+CsvPlaybackLoadResult loadCsvPlaybackFile(
+    const QString& filePath,
+    const PulseQualityThresholds& qualityThresholds);
 
 #endif // CSVPLAYBACKDATA_H

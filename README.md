@@ -1,6 +1,6 @@
 # EC-ECL Recorder
 
-EC-ECL Recorder 是用于电化学与电化学发光实验的 Windows 上位机软件。当前发布版本为 **v1.0.0**。
+EC-ECL Recorder 是用于电化学与电化学发光实验的 Windows 上位机软件。当前发布版本为 **v1.1.0**。
 
 ## 主要功能
 
@@ -48,8 +48,16 @@ EC-ECL Recorder 是用于电化学与电化学发光实验的 Windows 上位机�
 
 “滤波质量”会显示最近一个可评价脉冲的信噪比改善、背景噪声下降比例、面积
 偏差，以及当前记录中的质量警告数量。质量警告只表示滤波结果可能失真或未能
-降低背景噪声，不用于判断实验样品是否异常。判定条件为面积绝对偏差超过 5%、
-滤波后背景噪声增大或信噪比下降。详细指标同时写入 `_pulses.csv`。
+降低背景噪声，不用于判断实验样品是否异常。默认判定条件为面积绝对偏差超过
+5%、滤波后背景噪声增大或信噪比下降。“滤波质量阈值”区域可调整这三个条件，
+设置会自动保存；串口连接期间阈值会锁定，避免同一次实验中途改变判定标准。
+
+`_pulses.csv` 保留 `RawArea` 和 `FilteredArea`，并增加 `RawNoiseRMS`、
+`FilteredNoiseRMS`、`NoiseReduction(%)`、`SNRImprovement(dB)`、
+`AreaDifference(%)`、`QualityEvaluated`、`QualityWarning`、`QualityReason` 和
+`Valid`，并逐行记录本次使用的三个质量阈值。如果停止记录时一个脉冲尚未结束，
+该脉冲会作为 `InvalidPulse` 写入汇总，
+不会混入有效面积的平均值和 CV。
 
 支持的表头格式：
 

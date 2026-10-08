@@ -9,17 +9,24 @@
 
 namespace {
 
-QString pulseQualityReason(const PulseAreaMeasurement& pulse)
+QString pulseQualityReason(
+    const PulseAreaMeasurement& pulse,
+    const PulseQualityThresholds& thresholds)
 {
     if (!pulse.valid) return "InvalidPulse";
     if (!pulse.qualityEvaluated) return "NotEvaluated";
 
     QStringList reasons;
-    if (std::fabs(pulse.areaDifferencePercent) > 5.0) {
+    if (std::fabs(pulse.areaDifferencePercent)
+        > thresholds.maximumAreaDifferencePercent) {
         reasons.append("AreaDistortion");
     }
-    if (pulse.noiseReductionPercent < 0.0) reasons.append("NoiseIncreased");
-    if (pulse.snrImprovementDb < 0.0) reasons.append("SnrDecreased");
+    if (pulse.noiseReductionPercent < thresholds.minimumNoiseReductionPercent) {
+        reasons.append("NoiseReductionLow");
+    }
+    if (pulse.snrImprovementDb < thresholds.minimumSnrImprovementDb) {
+        reasons.append("SnrImprovementLow");
+    }
     return reasons.isEmpty() ? QString("OK") : reasons.join('|');
 }
 
@@ -27,6 +34,7 @@ QString pulseQualityReason(const PulseAreaMeasurement& pulse)
 
 void SerialPortAssistant::resetPulseAreaResults()
 {
+    m_pulseAreaAnalyzer.setQualityThresholds(currentPulseQualityThresholds());
     m_pulseAreaAnalyzer.reset();
     m_pulseSummaries.clear();
     m_recordedPulseSummaries.clear();
@@ -38,8 +46,63 @@ void SerialPortAssistant::flushPulseAreaAnalyzer()
     PulseAreaMeasurement incomplete;
     if (!m_pulseAreaAnalyzer.flush(&incomplete)) return;
     m_pulseSummaries.append(incomplete);
-    if (m_csvRecorder.isRecording()) m_recordedPulseSummaries.append(incomplete);
+    if (m_csvRecorder.isRecording()
+        && incomplete.index >= m_recordingFirstPulseIndex) {
+        m_recordedPulseSummaries.append(incomplete);
+    }
     updatePulseAreaStatus();
+}
+
+void SerialPortAssistant::captureRecordingIncompletePulse()
+{
+    if (!m_csvRecorder.isRecording() || !m_realtimeFilter.isEnabled()) return;
+    PulseAreaMeasurement incomplete;
+    if (!m_pulseAreaAnalyzer.snapshotIncomplete(&incomplete)
+        || incomplete.index < m_recordingFirstPulseIndex) {
+        return;
+    }
+    if (!m_recordedPulseSummaries.isEmpty()
+        && m_recordedPulseSummaries.last().index == incomplete.index) {
+        m_recordedPulseSummaries.last() = incomplete;
+    }
+    else {
+        m_recordedPulseSummaries.append(incomplete);
+    }
+}
+
+PulseQualityThresholds SerialPortAssistant::currentPulseQualityThresholds() const
+{
+    PulseQualityThresholds thresholds;
+    if (Spin_MaxAreaDifference) {
+        thresholds.maximumAreaDifferencePercent = Spin_MaxAreaDifference->value();
+    }
+    if (Spin_MinNoiseReduction) {
+        thresholds.minimumNoiseReductionPercent = Spin_MinNoiseReduction->value();
+    }
+    if (Spin_MinSnrImprovement) {
+        thresholds.minimumSnrImprovementDb = Spin_MinSnrImprovement->value();
+    }
+    return thresholds;
+}
+
+void SerialPortAssistant::applyPulseQualityThresholds()
+{
+    const PulseQualityThresholds thresholds = currentPulseQualityThresholds();
+    m_pulseAreaAnalyzer.setQualityThresholds(thresholds);
+    for (PulseAreaMeasurement& pulse : m_pulseSummaries) {
+        PulseAreaAnalyzer::applyQualityThresholds(&pulse, thresholds);
+    }
+    for (PulseAreaMeasurement& pulse : m_recordedPulseSummaries) {
+        PulseAreaAnalyzer::applyQualityThresholds(&pulse, thresholds);
+    }
+    updatePulseAreaStatus();
+}
+
+void SerialPortAssistant::setPulseQualityControlsEnabled(bool enabled)
+{
+    Spin_MaxAreaDifference->setEnabled(enabled);
+    Spin_MinNoiseReduction->setEnabled(enabled);
+    Spin_MinSnrImprovement->setEnabled(enabled);
 }
 
 void SerialPortAssistant::updatePulseAreaStatus()
@@ -132,7 +195,10 @@ bool SerialPortAssistant::writePulseSummaryFile(
     stream << "PulseIndex,StartTime(s),EndTime(s),RawBaseline,FilteredBaseline,"
         "RawPeak,FilteredPeak,RawArea,FilteredArea,RawNoiseRMS,FilteredNoiseRMS,"
         "NoiseReduction(%),SNRImprovement(dB),AreaDifference(%),"
-        "QualityEvaluated,QualityWarning,QualityReason,Valid\n";
+        "MaxAreaDifferenceThreshold(%),MinNoiseReductionThreshold(%),"
+        "MinSNRImprovementThreshold(dB),QualityEvaluated,QualityWarning,"
+        "QualityReason,Valid\n";
+    const PulseQualityThresholds thresholds = currentPulseQualityThresholds();
     for (const PulseAreaMeasurement& pulse : m_recordedPulseSummaries) {
         stream << pulse.index << ','
             << QString::number(pulse.startTimeSeconds, 'f', 6) << ','
@@ -148,9 +214,12 @@ bool SerialPortAssistant::writePulseSummaryFile(
             << QString::number(pulse.noiseReductionPercent, 'f', 6) << ','
             << QString::number(pulse.snrImprovementDb, 'f', 6) << ','
             << QString::number(pulse.areaDifferencePercent, 'f', 6) << ','
+            << QString::number(thresholds.maximumAreaDifferencePercent, 'f', 3) << ','
+            << QString::number(thresholds.minimumNoiseReductionPercent, 'f', 3) << ','
+            << QString::number(thresholds.minimumSnrImprovementDb, 'f', 3) << ','
             << (pulse.qualityEvaluated ? 1 : 0) << ','
             << (pulse.qualityWarning ? 1 : 0) << ','
-            << pulseQualityReason(pulse) << ','
+            << pulseQualityReason(pulse, thresholds) << ','
             << (pulse.valid ? 1 : 0) << '\n';
     }
     stream.flush();

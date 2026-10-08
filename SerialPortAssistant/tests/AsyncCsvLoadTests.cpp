@@ -29,7 +29,9 @@ int main(int argc, char* argv[])
     QObject::connect(&watcher, &QFutureWatcher<CsvPlaybackLoadResult>::finished,
                      &application, &QCoreApplication::quit);
     QTimer::singleShot(10000, &application, &QCoreApplication::quit);
-    watcher.setFuture(QtConcurrent::run(loadCsvPlaybackFile, csvPath));
+    watcher.setFuture(QtConcurrent::run([csvPath]() {
+        return loadCsvPlaybackFile(csvPath);
+    }));
     application.exec();
 
     if (!watcher.isFinished()) {

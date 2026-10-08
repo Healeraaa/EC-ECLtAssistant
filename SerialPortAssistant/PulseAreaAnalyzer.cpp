@@ -6,10 +6,12 @@
 
 PulseAreaAnalyzer::PulseAreaAnalyzer(
     double voltageThreshold,
-    std::size_t baselineSamples)
+    std::size_t baselineSamples,
+    const PulseQualityThresholds& qualityThresholds)
     : m_voltageThreshold(voltageThreshold > 0.0 ? voltageThreshold : 0.1),
       m_baselineSamples(std::max<std::size_t>(1, baselineSamples))
 {
+    setQualityThresholds(qualityThresholds);
 }
 
 void PulseAreaAnalyzer::reset()
@@ -21,6 +23,22 @@ void PulseAreaAnalyzer::reset()
     m_previousFiltered = SignalFilterResult{};
     m_active = false;
     m_nextPulseIndex = 1;
+}
+
+void PulseAreaAnalyzer::setQualityThresholds(const PulseQualityThresholds& thresholds)
+{
+    m_qualityThresholds.maximumAreaDifferencePercent =
+        std::isfinite(thresholds.maximumAreaDifferencePercent)
+        ? std::max(0.0, thresholds.maximumAreaDifferencePercent)
+        : 5.0;
+    m_qualityThresholds.minimumNoiseReductionPercent =
+        std::isfinite(thresholds.minimumNoiseReductionPercent)
+        ? thresholds.minimumNoiseReductionPercent
+        : 0.0;
+    m_qualityThresholds.minimumSnrImprovementDb =
+        std::isfinite(thresholds.minimumSnrImprovementDb)
+        ? thresholds.minimumSnrImprovementDb
+        : 0.0;
 }
 
 bool PulseAreaAnalyzer::process(
@@ -105,6 +123,17 @@ bool PulseAreaAnalyzer::flush(PulseAreaMeasurement* incompletePulse)
     return true;
 }
 
+bool PulseAreaAnalyzer::snapshotIncomplete(PulseAreaMeasurement* incompletePulse) const
+{
+    if (!m_active) return false;
+    PulseAreaMeasurement snapshot = m_current;
+    snapshot.valid = false;
+    snapshot.endTimeSeconds = m_previousRaw.timeSeconds;
+    finalizeMeasurement(&snapshot);
+    if (incompletePulse) *incompletePulse = snapshot;
+    return true;
+}
+
 double PulseAreaAnalyzer::median(const std::deque<double>& values)
 {
     if (values.empty()) return 0.0;
@@ -131,7 +160,7 @@ double PulseAreaAnalyzer::standardDeviation(const std::deque<double>& values)
     return std::sqrt(squaredDifference / static_cast<double>(values.size() - 1));
 }
 
-void PulseAreaAnalyzer::finalizeMeasurement(PulseAreaMeasurement* measurement)
+void PulseAreaAnalyzer::finalizeMeasurement(PulseAreaMeasurement* measurement) const
 {
     if (!measurement) return;
 
@@ -161,11 +190,22 @@ void PulseAreaAnalyzer::finalizeMeasurement(PulseAreaMeasurement* measurement)
             && std::isfinite(measurement->areaDifferencePercent);
     }
 
+    applyQualityThresholds(measurement, m_qualityThresholds);
+}
+
+void PulseAreaAnalyzer::applyQualityThresholds(
+    PulseAreaMeasurement* measurement,
+    const PulseQualityThresholds& thresholds)
+{
+    if (!measurement) return;
     measurement->qualityWarning = !measurement->valid
         || (measurement->qualityEvaluated
-            && (std::fabs(measurement->areaDifferencePercent) > 5.0
-                || measurement->noiseReductionPercent < 0.0
-                || measurement->snrImprovementDb < 0.0));
+            && (std::fabs(measurement->areaDifferencePercent)
+                    > std::max(0.0, thresholds.maximumAreaDifferencePercent)
+                || measurement->noiseReductionPercent
+                    < thresholds.minimumNoiseReductionPercent
+                || measurement->snrImprovementDb
+                    < thresholds.minimumSnrImprovementDb));
 }
 
 void PulseAreaAnalyzer::appendBaselineSample(

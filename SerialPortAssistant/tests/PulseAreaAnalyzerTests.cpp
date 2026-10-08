@@ -45,7 +45,12 @@ int main()
         SignalFilterResult filtered { 0.0, 0.0, 10.0, false, index >= 5 };
         analyzer.process(raw, filtered, nullptr);
     }
-    if (!analyzer.flush(&completed) || completed.valid) {
+    PulseAreaMeasurement snapshot;
+    if (!analyzer.snapshotIncomplete(&snapshot)
+        || snapshot.valid
+        || !analyzer.flush(&completed)
+        || completed.valid
+        || snapshot.index != completed.index) {
         std::cerr << "FAILED: incomplete pulse flush\n";
         return 1;
     }
@@ -80,6 +85,13 @@ int main()
         || completed.snrImprovementDb < 15.0
         || std::fabs(completed.areaDifferencePercent) > 0.1) {
         std::cerr << "FAILED: expected noise reduction quality metrics\n";
+        return 1;
+    }
+    PulseQualityThresholds strictThresholds;
+    strictThresholds.minimumNoiseReductionPercent = 95.0;
+    PulseAreaAnalyzer::applyQualityThresholds(&completed, strictThresholds);
+    if (!completed.qualityWarning) {
+        std::cerr << "FAILED: configurable quality threshold was not applied\n";
         return 1;
     }
 

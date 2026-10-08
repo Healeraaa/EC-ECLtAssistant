@@ -21,7 +21,10 @@ bool parseOptionalNumber(const QString& text, double* value)
 }
 }
 
-bool CsvPlaybackData::load(const QString& filePath, QString* errorMessage)
+bool CsvPlaybackData::load(
+    const QString& filePath,
+    QString* errorMessage,
+    const PulseQualityThresholds& qualityThresholds)
 {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -160,7 +163,7 @@ bool CsvPlaybackData::load(const QString& filePath, QString* errorMessage)
 
     QVector<PulseAreaMeasurement> loadedPulses;
     if (filteredDataAvailable) {
-        PulseAreaAnalyzer analyzer;
+        PulseAreaAnalyzer analyzer(0.1, 50, qualityThresholds);
         for (const CsvPlaybackRow& row : loadedRows) {
             if (!row.hasVoltage || !row.hasCurrent || !row.hasOptical || !row.hasFiltered) {
                 analyzer.reset();
@@ -220,7 +223,17 @@ double CsvPlaybackData::duration() const
 
 CsvPlaybackLoadResult loadCsvPlaybackFile(const QString& filePath)
 {
+    return loadCsvPlaybackFile(filePath, PulseQualityThresholds{});
+}
+
+CsvPlaybackLoadResult loadCsvPlaybackFile(
+    const QString& filePath,
+    const PulseQualityThresholds& qualityThresholds)
+{
     CsvPlaybackLoadResult result;
-    result.succeeded = result.data.load(filePath, &result.errorMessage);
+    result.succeeded = result.data.load(
+        filePath,
+        &result.errorMessage,
+        qualityThresholds);
     return result;
 }

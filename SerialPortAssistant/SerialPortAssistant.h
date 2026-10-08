@@ -60,7 +60,11 @@ private:
     void flushRealtimeFilter();
     void resetPulseAreaResults();
     void flushPulseAreaAnalyzer();
+    void captureRecordingIncompletePulse();
     void updatePulseAreaStatus();
+    PulseQualityThresholds currentPulseQualityThresholds() const;
+    void applyPulseQualityThresholds();
+    void setPulseQualityControlsEnabled(bool enabled);
     bool writePulseSummaryFile(
         const QString& dataFilePath,
         QString* summaryFilePath,
@@ -119,6 +123,9 @@ private:
     QCheckBox* CheckBox_PausePlot, * CheckBox_AutoScale;
     QCheckBox* CheckBox_Crosshair, * CheckBox_Measurement;
     QCheckBox* CheckBox_EnableFilter;
+    QDoubleSpinBox* Spin_MaxAreaDifference;
+    QDoubleSpinBox* Spin_MinNoiseReduction;
+    QDoubleSpinBox* Spin_MinSnrImprovement;
     QCheckBox* CheckBox_ChannelVisible[3];
     QComboBox* Combo_FilterDisplay;
     QLineEdit* Edit_CSVDirectory;
@@ -168,6 +175,7 @@ private:
     PulseAreaAnalyzer m_pulseAreaAnalyzer;
     QVector<PulseAreaMeasurement> m_pulseSummaries;
     QVector<PulseAreaMeasurement> m_recordedPulseSummaries;
+    int m_recordingFirstPulseIndex = 1;
     QSerialPort* serialPort;
     QStringList lastPortList;
 

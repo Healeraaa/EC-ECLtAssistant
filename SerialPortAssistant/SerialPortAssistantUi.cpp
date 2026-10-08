@@ -365,6 +365,40 @@ void SerialPortAssistant::initUI() {
     curveGrid->addWidget(Btn_ExportChart, 6, 2);
     configLayout->addWidget(curveCard);
 
+    QGroupBox* qualityCard = new QGroupBox(QString::fromUtf8("滤波质量阈值"));
+    QGridLayout* qualityGrid = new QGridLayout(qualityCard);
+    Spin_MaxAreaDifference = new QDoubleSpinBox();
+    Spin_MaxAreaDifference->setRange(0.1, 100.0);
+    Spin_MaxAreaDifference->setDecimals(1);
+    Spin_MaxAreaDifference->setSingleStep(0.5);
+    Spin_MaxAreaDifference->setSuffix(" %");
+    Spin_MaxAreaDifference->setValue(5.0);
+    Spin_MaxAreaDifference->setToolTip(
+        QString::fromUtf8("滤波前后积分面积绝对偏差超过此值时产生质量警告。"));
+    Spin_MinNoiseReduction = new QDoubleSpinBox();
+    Spin_MinNoiseReduction->setRange(-100.0, 100.0);
+    Spin_MinNoiseReduction->setDecimals(1);
+    Spin_MinNoiseReduction->setSingleStep(1.0);
+    Spin_MinNoiseReduction->setSuffix(" %");
+    Spin_MinNoiseReduction->setValue(0.0);
+    Spin_MinNoiseReduction->setToolTip(
+        QString::fromUtf8("背景噪声下降比例低于此值时产生质量警告。"));
+    Spin_MinSnrImprovement = new QDoubleSpinBox();
+    Spin_MinSnrImprovement->setRange(-60.0, 60.0);
+    Spin_MinSnrImprovement->setDecimals(1);
+    Spin_MinSnrImprovement->setSingleStep(0.5);
+    Spin_MinSnrImprovement->setSuffix(" dB");
+    Spin_MinSnrImprovement->setValue(0.0);
+    Spin_MinSnrImprovement->setToolTip(
+        QString::fromUtf8("信噪比提升低于此值时产生质量警告。"));
+    qualityGrid->addWidget(new QLabel(QString::fromUtf8("最大面积偏差：")), 0, 0);
+    qualityGrid->addWidget(Spin_MaxAreaDifference, 0, 1);
+    qualityGrid->addWidget(new QLabel(QString::fromUtf8("最低噪声下降：")), 1, 0);
+    qualityGrid->addWidget(Spin_MinNoiseReduction, 1, 1);
+    qualityGrid->addWidget(new QLabel(QString::fromUtf8("最低 SNR 提升：")), 2, 0);
+    qualityGrid->addWidget(Spin_MinSnrImprovement, 2, 1);
+    configLayout->addWidget(qualityCard);
+
     // Checkboxes
     QHBoxLayout* checkRow = new QHBoxLayout();
     CheckBox_EnablePlot = new QCheckBox(QString::fromUtf8("启用绘图"));
