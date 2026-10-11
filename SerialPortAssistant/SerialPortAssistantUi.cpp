@@ -80,6 +80,16 @@ QLabel* toolbarLabel(const QString& text)
     return label;
 }
 
+QFrame* statusSeparator()
+{
+    QFrame* separator = new QFrame();
+    separator->setFrameShape(QFrame::VLine);
+    separator->setFrameShadow(QFrame::Plain);
+    separator->setFixedHeight(16);
+    separator->setStyleSheet(QStringLiteral("color: #334155;"));
+    return separator;
+}
+
 } // namespace
 
 void SerialPortAssistant::initUI()
@@ -123,36 +133,55 @@ void SerialPortAssistant::initUI()
     Btn_ResetZoom = new QPushButton(QString::fromUtf8("恢复缩放"));
     Btn_ExportChart = new QPushButton(QString::fromUtf8("导出 PNG"));
     Btn_ResetPlot = new QPushButton(QString::fromUtf8("清空曲线"));
-
-    int chartColumn = 0;
-    chartControlGrid->addWidget(toolbarLabel(QString::fromUtf8("曲线")), 0, chartColumn++);
-    chartControlGrid->addWidget(CheckBox_EnablePlot, 0, chartColumn++);
-    chartControlGrid->addWidget(CheckBox_ChannelVisible[0], 0, chartColumn++);
-    chartControlGrid->addWidget(CheckBox_ChannelVisible[1], 0, chartColumn++);
-    chartControlGrid->addWidget(CheckBox_ChannelVisible[2], 0, chartColumn++);
-    chartControlGrid->addWidget(CheckBox_PausePlot, 0, chartColumn++);
-    chartControlGrid->addWidget(CheckBox_AutoScale, 0, chartColumn++);
-    chartControlGrid->addWidget(CheckBox_Crosshair, 0, chartColumn++);
-    chartControlGrid->addWidget(CheckBox_Measurement, 0, chartColumn++);
-    chartControlGrid->setColumnStretch(chartColumn, 1);
-
-    chartColumn = 0;
-    chartControlGrid->addWidget(toolbarLabel(QString::fromUtf8("处理")), 1, chartColumn++);
-    chartControlGrid->addWidget(CheckBox_EnableFilter, 1, chartColumn++);
-    chartControlGrid->addWidget(Combo_FilterDisplay, 1, chartColumn, 1, 2);
-    chartColumn += 2;
-    chartControlGrid->addWidget(Btn_ResetPlot, 1, chartColumn++);
-    chartControlGrid->addWidget(Btn_FitChart, 1, chartColumn++);
-    chartControlGrid->addWidget(Btn_ResetZoom, 1, chartColumn++);
-    chartControlGrid->addWidget(Btn_ExportChart, 1, chartColumn++);
-    chartControlGrid->setColumnStretch(chartColumn, 1);
+    Btn_ResetPlot->setMinimumWidth(82);
+    Btn_FitChart->setMinimumWidth(82);
+    Btn_ResetZoom->setMinimumWidth(82);
+    Btn_ExportChart->setMinimumWidth(82);
+    CheckBox_PausePlot->setToolTip(QString::fromUtf8(
+        "仅暂停曲线刷新，不停止串口接收、数据处理和 CSV 保存。"));
+    CheckBox_AutoScale->setToolTip(QString::fromUtf8(
+        "根据当前可见曲线持续自动调整坐标轴范围。"));
+    CheckBox_EnableFilter->setToolTip(QString::fromUtf8(
+        "仅 GPCI 模式可用；原始数据仍会保留在 CSV 中。"));
+    Combo_FilterDisplay->setToolTip(QString::fromUtf8(
+        "切换图表使用滤波结果或原始数据，不改变 CSV 已保存内容。"));
+    Btn_ResetPlot->setToolTip(QString::fromUtf8(
+        "清空上位机曲线缓存，不重置设备端实验状态。"));
+    Btn_FitChart->setToolTip(QString::fromUtf8(
+        "根据当前缓存中的可见数据调整坐标轴范围。"));
+    Btn_ResetZoom->setToolTip(QString::fromUtf8(
+        "取消鼠标缩放，恢复自动范围或图表设置中的手动范围。"));
+    Btn_ExportChart->setToolTip(QString::fromUtf8(
+        "将当前图表视图导出为 PNG 图片。"));
 
     Label_CursorReadout = new QLabel(QString::fromUtf8("移动鼠标读取曲线数值"));
     Label_Measurement = new QLabel(QString::fromUtf8("测量未启用"));
     Label_CursorReadout->setTextInteractionFlags(Qt::TextSelectableByMouse);
     Label_Measurement->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    chartControlGrid->addWidget(Label_CursorReadout, 2, 0, 1, 5);
-    chartControlGrid->addWidget(Label_Measurement, 2, 5, 1, 5);
+
+    chartControlGrid->addWidget(toolbarLabel(QString::fromUtf8("显示")), 0, 0);
+    chartControlGrid->addWidget(CheckBox_EnablePlot, 0, 1);
+    chartControlGrid->addWidget(CheckBox_ChannelVisible[0], 0, 2);
+    chartControlGrid->addWidget(CheckBox_ChannelVisible[1], 0, 3);
+    chartControlGrid->addWidget(CheckBox_ChannelVisible[2], 0, 4);
+    chartControlGrid->addWidget(CheckBox_PausePlot, 0, 5);
+    chartControlGrid->addWidget(CheckBox_AutoScale, 0, 6);
+    chartControlGrid->setColumnStretch(7, 1);
+
+    chartControlGrid->addWidget(toolbarLabel(QString::fromUtf8("测量")), 1, 0);
+    chartControlGrid->addWidget(CheckBox_Crosshair, 1, 1);
+    chartControlGrid->addWidget(CheckBox_Measurement, 1, 2);
+    chartControlGrid->addWidget(Label_CursorReadout, 1, 3, 1, 3);
+    chartControlGrid->addWidget(Label_Measurement, 1, 6, 1, 3);
+
+    chartControlGrid->addWidget(toolbarLabel(QString::fromUtf8("处理")), 2, 0);
+    chartControlGrid->addWidget(CheckBox_EnableFilter, 2, 1);
+    chartControlGrid->addWidget(Combo_FilterDisplay, 2, 2, 1, 2);
+    chartControlGrid->addWidget(Btn_ResetPlot, 2, 4);
+    chartControlGrid->addWidget(Btn_FitChart, 2, 5);
+    chartControlGrid->addWidget(Btn_ResetZoom, 2, 6);
+    chartControlGrid->addWidget(Btn_ExportChart, 2, 7);
+    chartControlGrid->setColumnStretch(8, 1);
     centralLayout->addWidget(chartControls);
 
     QChart* chart = new QChart();
@@ -253,6 +282,14 @@ void SerialPortAssistant::initUI()
     SerialPort_Send->setEnabled(false);
     CheckBox_SaveCSV = new QCheckBox(QString::fromUtf8("保存 CSV"));
     CheckBox_SaveCSV->setChecked(true);
+    CheckBox_SaveCSV->setToolTip(QString::fromUtf8(
+        "连接串口后自动记录 CSV，取消勾选会结束当前记录并安全写盘。"));
+    SerialPort_Connect->setToolTip(QString::fromUtf8(
+        "按当前串口和波特率连接设备。"));
+    SerialPort_Disonnect->setToolTip(QString::fromUtf8(
+        "断开设备并刷新滤波尾部、脉冲汇总和 CSV 缓冲区。"));
+    SerialPort_Send->setToolTip(QString::fromUtf8(
+        "将当前模式、通道、量程和实验参数发送给设备。"));
 
     m_experimentToolBar->addWidget(toolbarLabel(QString::fromUtf8("串口")));
     m_experimentToolBar->addWidget(SerialPort_Number);
@@ -303,6 +340,7 @@ void SerialPortAssistant::initUI()
     addDockWidget(Qt::RightDockWidgetArea, m_settingsDock);
 
     QWidget* experimentTab = new QWidget();
+    experimentTab->setObjectName(QStringLiteral("experimentTab"));
     QVBoxLayout* experimentLayout = new QVBoxLayout(experimentTab);
     experimentLayout->setContentsMargins(8, 8, 8, 8);
     experimentLayout->setSpacing(8);
@@ -350,6 +388,7 @@ void SerialPortAssistant::initUI()
     m_settingsTabs->addTab(experimentTab, QString::fromUtf8("实验参数"));
 
     QWidget* analysisTab = new QWidget();
+    analysisTab->setObjectName(QStringLiteral("analysisTab"));
     QVBoxLayout* analysisLayout = new QVBoxLayout(analysisTab);
     analysisLayout->setContentsMargins(8, 8, 8, 8);
     analysisLayout->setSpacing(8);
@@ -367,6 +406,12 @@ void SerialPortAssistant::initUI()
         resultLayout->addWidget(label);
     }
     analysisLayout->addWidget(resultCard);
+
+    QWidget* chartSettingsTab = new QWidget();
+    chartSettingsTab->setObjectName(QStringLiteral("chartSettingsTab"));
+    QVBoxLayout* chartSettingsLayout = new QVBoxLayout(chartSettingsTab);
+    chartSettingsLayout->setContentsMargins(8, 8, 8, 8);
+    chartSettingsLayout->setSpacing(8);
 
     QGroupBox* axisCard = new QGroupBox(QString::fromUtf8("坐标轴范围"));
     QGridLayout* axisGrid = new QGridLayout(axisCard);
@@ -400,7 +445,7 @@ void SerialPortAssistant::initUI()
     axisGrid->addWidget(applyXAxisButton, 3, 0, 1, 2);
     axisGrid->addWidget(applyYAxisButton, 3, 2);
     axisGrid->addWidget(applyYRightButton, 3, 3);
-    analysisLayout->addWidget(axisCard);
+    chartSettingsLayout->addWidget(axisCard);
 
     QGroupBox* qualityCard = new QGroupBox(QString::fromUtf8("滤波质量阈值"));
     QGridLayout* qualityGrid = new QGridLayout(qualityCard);
@@ -443,11 +488,14 @@ void SerialPortAssistant::initUI()
     performanceGrid->addWidget(Edit_XRange, 0, 1);
     performanceGrid->addWidget(new QLabel(QString::fromUtf8("绘图点数")), 1, 0);
     performanceGrid->addWidget(Edit_RenderPoints, 1, 1);
-    analysisLayout->addWidget(performanceCard);
+    chartSettingsLayout->addWidget(performanceCard);
     analysisLayout->addStretch();
     m_settingsTabs->addTab(analysisTab, QString::fromUtf8("分析结果"));
+    chartSettingsLayout->addStretch();
+    m_settingsTabs->addTab(chartSettingsTab, QString::fromUtf8("图表设置"));
 
     QWidget* playbackTab = new QWidget();
+    playbackTab->setObjectName(QStringLiteral("playbackTab"));
     QVBoxLayout* playbackLayout = new QVBoxLayout(playbackTab);
     playbackLayout->setContentsMargins(8, 8, 8, 8);
     QGroupBox* playbackCard = new QGroupBox(QString::fromUtf8("CSV 回放"));
@@ -501,10 +549,16 @@ void SerialPortAssistant::initUI()
     Label_CSVStatus = new QLabel(QString::fromUtf8("未记录"));
     Label_CSVStatus->setMaximumWidth(320);
     Label_CSVStatus->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    Label_ConnectionStatus->setMinimumWidth(72);
+    Label_DataRate->setMinimumWidth(72);
     statusBar()->addWidget(Label_ConnectionStatus);
+    statusBar()->addWidget(statusSeparator());
     statusBar()->addWidget(Label_DataRate);
+    statusBar()->addWidget(statusSeparator());
     statusBar()->addWidget(Label_FrameStatus, 1);
+    statusBar()->addWidget(statusSeparator());
     statusBar()->addWidget(Label_SampleStatus, 1);
+    statusBar()->addPermanentWidget(statusSeparator());
     statusBar()->addPermanentWidget(Label_CSVStatus);
 
     Btn_About = new QPushButton(this);

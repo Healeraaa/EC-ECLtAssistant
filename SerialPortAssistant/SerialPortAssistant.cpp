@@ -455,6 +455,7 @@ void SerialPortAssistant::startCSVLogging() {
     QDir directory(Edit_CSVDirectory->text());
     if (!directory.exists() && !directory.mkpath(QStringLiteral("."))) {
         Label_CSVStatus->setText(QString::fromUtf8("无法创建保存目录"));
+        Label_CSVStatus->setToolTip(QDir::toNativeSeparators(directory.absolutePath()));
         SerialPort_ReceiveAear->appendPlainText("[CSV Error] Cannot create directory: " + directory.absolutePath());
         CheckBox_SaveCSV->setChecked(false);
         return;
@@ -464,6 +465,8 @@ void SerialPortAssistant::startCSVLogging() {
     QString errorMessage;
     if (!m_csvRecorder.start(filePath, m_realtimeFilter.isEnabled(), &errorMessage)) {
         Label_CSVStatus->setText(QString::fromUtf8("文件创建失败"));
+        Label_CSVStatus->setToolTip(errorMessage + QStringLiteral(": ")
+            + QDir::toNativeSeparators(filePath));
         SerialPort_ReceiveAear->appendPlainText("[CSV Error] " + errorMessage + ": " + filePath);
         CheckBox_SaveCSV->setChecked(false);
         return;
@@ -474,6 +477,7 @@ void SerialPortAssistant::startCSVLogging() {
 
     m_csvFlushTimer->start(1000);
     Label_CSVStatus->setText(QString::fromUtf8("正在记录：") + QDir::toNativeSeparators(filePath));
+    Label_CSVStatus->setToolTip(QDir::toNativeSeparators(filePath));
     SerialPort_ReceiveAear->appendPlainText("[CSV] Started logging to " + QDir::toNativeSeparators(filePath));
     saveSettings();
 }
@@ -496,6 +500,7 @@ void SerialPortAssistant::stopCSVLogging() {
     if (succeeded) {
         Label_CSVStatus->setText(
             QString::fromUtf8("已保存 %1 行：%2").arg(rowCount).arg(QDir::toNativeSeparators(filePath)));
+        Label_CSVStatus->setToolTip(QDir::toNativeSeparators(filePath));
         SerialPort_ReceiveAear->appendPlainText(
             QString("[CSV] Saved %1 rows to %2").arg(rowCount).arg(QDir::toNativeSeparators(filePath)));
         if (m_realtimeFilter.isEnabled() && pulseSummarySucceeded) {
@@ -509,6 +514,7 @@ void SerialPortAssistant::stopCSVLogging() {
     }
     else {
         Label_CSVStatus->setText(QString::fromUtf8("保存失败：") + errorMessage);
+        Label_CSVStatus->setToolTip(errorMessage);
         SerialPort_ReceiveAear->appendPlainText("[CSV Error] " + errorMessage);
     }
 }
@@ -631,10 +637,21 @@ void SerialPortAssistant::loadSettings() {
     updateChemLabels(mode);
 
     if (m_settingsTabs->count() > 0) {
-        m_settingsTabs->setCurrentIndex(qBound(
-            0,
-            settings.value("window/settingsTab", 0).toInt(),
-            m_settingsTabs->count() - 1));
+        const QString savedTabId = settings.value("window/settingsTabId").toString();
+        int settingsTabIndex = -1;
+        for (int tabIndex = 0; tabIndex < m_settingsTabs->count(); ++tabIndex) {
+            if (m_settingsTabs->widget(tabIndex)->objectName() == savedTabId) {
+                settingsTabIndex = tabIndex;
+                break;
+            }
+        }
+        if (settingsTabIndex < 0) {
+            const int legacyTabIndex = settings.value("window/settingsTab", 0).toInt();
+            settingsTabIndex = legacyTabIndex == 2
+                ? 3
+                : qBound(0, legacyTabIndex, m_settingsTabs->count() - 1);
+        }
+        m_settingsTabs->setCurrentIndex(settingsTabIndex);
     }
     const QByteArray geometry = settings.value("window/geometry").toByteArray();
     if (!geometry.isEmpty()) {
@@ -688,6 +705,9 @@ void SerialPortAssistant::saveSettings() {
     settings.setValue("playback/speedIndex", Combo_PlaybackSpeed->currentIndex());
     settings.setValue("playback/recentFiles", m_recentCsvFiles);
     settings.setValue("window/settingsTab", m_settingsTabs->currentIndex());
+    settings.setValue(
+        "window/settingsTabId",
+        m_settingsTabs->currentWidget()->objectName());
     settings.setValue("window/geometry", saveGeometry());
     settings.setValue("window/state", saveState(1));
 

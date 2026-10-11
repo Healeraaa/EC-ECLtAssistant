@@ -1,5 +1,6 @@
 #include "SerialPortAssistant.h"
 
+#include <QDir>
 #include <QFileInfo>
 #include <algorithm>
 
@@ -93,5 +94,7 @@ void SerialPortAssistant::updateStatusPanel()
             QString::fromUtf8("正在记录 %1 行：%2")
                 .arg(rowCount)
                 .arg(QFileInfo(m_csvRecorder.filePath()).fileName()));
+        Label_CSVStatus->setToolTip(
+            QDir::toNativeSeparators(m_csvRecorder.filePath()));
     }
 }
