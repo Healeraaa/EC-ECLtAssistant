@@ -54,6 +54,7 @@ bool ExperimentPresetStore::save(
     plot["yMax"] = preset.yMaximum;
     plot["yRightMin"] = preset.rightMinimum;
     plot["yRightMax"] = preset.rightMaximum;
+    plot["xFollow"] = preset.xFollow;
     plot["autoScale"] = preset.autoScale;
     QJsonArray visibility;
     for (bool visible : preset.channelVisible) visibility.append(visible);
@@ -140,6 +141,9 @@ bool ExperimentPresetStore::load(
         return false;
     }
     loaded.autoScale = plot.value("autoScale").toBool(false);
+    loaded.xFollow = plot.contains("xFollow")
+        ? plot.value("xFollow").toBool(true)
+        : loaded.autoScale;
     const QJsonArray visibility = plot.value("visibility").toArray();
     for (int channel = 0; channel < 3 && channel < visibility.size(); ++channel) {
         loaded.channelVisible[channel] = visibility.at(channel).toBool(true);

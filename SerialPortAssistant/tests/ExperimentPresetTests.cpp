@@ -16,6 +16,7 @@ int main()
     expected.modeValues[2][4] = -123.5;
     expected.displayPoints = 2048;
     expected.xMaximum = 42.0;
+    expected.xFollow = true;
     expected.autoScale = true;
     expected.channelVisible = {{ true, false, true }};
 
@@ -37,6 +38,7 @@ int main()
         || actual.modeValues[2][4] != expected.modeValues[2][4]
         || actual.displayPoints != expected.displayPoints
         || actual.xMaximum != expected.xMaximum
+        || actual.xFollow != expected.xFollow
         || actual.autoScale != expected.autoScale
         || actual.channelVisible != expected.channelVisible) {
         std::cerr << "FAILED: preset round trip mismatch\n";

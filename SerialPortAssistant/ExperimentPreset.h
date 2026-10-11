@@ -18,6 +18,7 @@ struct ExperimentPresetData
     double yMaximum = 2.0;
     double rightMinimum = -2.0;
     double rightMaximum = 2.0;
+    bool xFollow = true;
     bool autoScale = false;
     std::array<bool, 3> channelVisible{{ true, true, true }};
 };

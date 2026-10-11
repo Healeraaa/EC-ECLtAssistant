@@ -31,6 +31,7 @@ void SerialPortAssistant::savePreset()
     preset.yMaximum = Edit_YMax->text().toDouble();
     preset.rightMinimum = Edit_YRightMin->text().toDouble();
     preset.rightMaximum = Edit_YRightMax->text().toDouble();
+    preset.xFollow = CheckBox_XFollow->isChecked();
     preset.autoScale = CheckBox_AutoScale->isChecked();
     for (int channel = 0; channel < 3; ++channel) {
         preset.channelVisible[channel] = CheckBox_ChannelVisible[channel]->isChecked();
@@ -78,8 +79,13 @@ void SerialPortAssistant::loadPreset()
     for (int channel = 0; channel < 3; ++channel) {
         CheckBox_ChannelVisible[channel]->setChecked(preset.channelVisible[channel]);
     }
+    CheckBox_XFollow->setChecked(preset.xFollow);
     CheckBox_AutoScale->setChecked(preset.autoScale);
-    if (!preset.autoScale) applyManualAxisRanges();
+    if (!preset.xFollow) applyManualXAxisRange();
+    if (!preset.autoScale) {
+        applyManualYAxisRange();
+        applyManualYRightAxisRange();
+    }
     saveSettings();
     SerialPort_ReceiveAear->appendPlainText("[Preset] Loaded: " + QDir::toNativeSeparators(filePath));
 }

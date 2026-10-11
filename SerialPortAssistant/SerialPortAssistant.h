@@ -74,10 +74,15 @@ private:
         QString* errorMessage) const;
     PlotDataBuffer& displayPlotBuffer();
     const PlotDataBuffer& displayPlotBuffer() const;
+    bool isFilteredPlotSelected() const;
+    PlotDataRange visiblePlotRange(bool includeFullCsv) const;
     void ensureSeriesCreated();
     void updatePlotSeries();
     void trimPlotBuffers();
     void applyManualAxisRanges();
+    void applyManualXAxisRange();
+    void applyManualYAxisRange();
+    void applyManualYRightAxisRange();
     void fitChartToData();
     void updateSeriesVisibility();
     void handleChartCursor(const QPointF& position);
@@ -123,7 +128,7 @@ private:
     QComboBox* Combo_Range;  // 新的范围选择下拉框，替代 Combo_Configs[1], [2], [3]
 
     QCheckBox* CheckBox_SaveCSV, * CheckBox_EnablePlot;
-    QCheckBox* CheckBox_PausePlot, * CheckBox_AutoScale;
+    QCheckBox* CheckBox_PausePlot, * CheckBox_XFollow, * CheckBox_AutoScale;
     QCheckBox* CheckBox_Crosshair, * CheckBox_Measurement;
     QCheckBox* CheckBox_EnableFilter;
     QDoubleSpinBox* Spin_MaxAreaDifference;
@@ -208,6 +213,7 @@ private:
     int m_playbackRowIndex = 0;
     double m_playbackTimeSeconds = 0.0;
     bool m_playbackActive = false;
+    bool m_displayingCsvPlayback = false;
     QStringList m_recentCsvFiles;
 
     struct MeasurementPoint {
@@ -229,6 +235,7 @@ private:
 
     std::array<std::array<double, 6>, 4> m_modeValues;
     int m_currentMode = -1;
+    int m_gpciFilterDisplayIndex = 0;
     quint64 m_lastReportedFrames = 0;
 };
 

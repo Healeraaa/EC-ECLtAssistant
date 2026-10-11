@@ -94,6 +94,20 @@ int wmain(int argc, wchar_t* argv[])
         std::cerr << "FAILED: parsed playback content mismatch\n";
         return 1;
     }
+    const PlotDataRange fullRange = data.range({{ true, true, true }}, false);
+    if (!fullRange.hasX || !fullRange.hasLeftAxis || !fullRange.hasRightAxis
+        || fullRange.xMinimum != 0.0 || fullRange.xMaximum != 0.02
+        || fullRange.leftMinimum != 1.0 || fullRange.leftMaximum != 4.0
+        || fullRange.rightMinimum != 10.0 || fullRange.rightMaximum != 20.0) {
+        std::cerr << "FAILED: full CSV range calculation mismatch\n";
+        return 1;
+    }
+    const PlotDataRange opticalOnlyRange = data.range({{ false, false, true }}, false);
+    if (opticalOnlyRange.hasLeftAxis || !opticalOnlyRange.hasRightAxis
+        || opticalOnlyRange.xMinimum != 0.0 || opticalOnlyRange.xMaximum != 0.02) {
+        std::cerr << "FAILED: visible-channel CSV range calculation mismatch\n";
+        return 1;
+    }
 
     const CsvPlaybackLoadResult loadResult = loadCsvPlaybackFile(validPath);
     if (!loadResult.succeeded || loadResult.data.rows().size() != 3) {
@@ -129,7 +143,13 @@ int wmain(int argc, wchar_t* argv[])
                           : (index % 2 == 0 ? "340" : "360")) << '\n';
     }
     rawGpciFile.close();
-    if (!data.load(rawGpciPath, &errorMessage)
+    if (data.load(rawGpciPath) == false) return 1;
+    if (data.hasFilteredData()) return 1;
+    if (!data.load(
+            rawGpciPath,
+            &errorMessage,
+            PulseQualityThresholds{},
+            true)
         || !data.hasFilteredData()
         || !data.rows().at(102).hasFiltered
         || !data.rows().at(102).gpciEvent
@@ -141,7 +161,7 @@ int wmain(int argc, wchar_t* argv[])
     }
     PulseQualityThresholds strictThresholds;
     strictThresholds.minimumSnrImprovementDb = 60.0;
-    if (!data.load(rawGpciPath, &errorMessage, strictThresholds)
+    if (!data.load(rawGpciPath, &errorMessage, strictThresholds, true)
         || data.pulses().isEmpty()
         || !data.pulses().front().qualityWarning) {
         std::cerr << "FAILED: playback quality thresholds were not applied\n";
@@ -156,7 +176,11 @@ int wmain(int argc, wchar_t* argv[])
         "VoltageFiltered(V),CurrentFiltered(A),OpticalSignalFiltered,FilterValid,GPCIEvent\n"
         "0.000000,1,2,3,1.1,2.1,3.1,1,1\n";
     filteredFile.close();
-    if (!data.load(filteredPath, &errorMessage)
+    if (!data.load(
+            filteredPath,
+            &errorMessage,
+            PulseQualityThresholds{},
+            true)
         || !data.hasFilteredData()
         || data.rows().front().filteredOptical != 3.1
         || !data.rows().front().filterValid

@@ -38,8 +38,10 @@ bool SerialPortAssistant::openCSVForPlayback(const QString& filePath)
     Label_PlaybackFile->setText(
         QString::fromUtf8("正在后台加载：%1").arg(QFileInfo(filePath).fileName()));
     const PulseQualityThresholds thresholds = currentPulseQualityThresholds();
-    m_csvLoadWatcher->setFuture(QtConcurrent::run([filePath, thresholds]() {
-        return loadCsvPlaybackFile(filePath, thresholds);
+    const bool enableGpciFilter = Combo_Mode->currentIndex() == 3
+        && CheckBox_EnableFilter->isChecked();
+    m_csvLoadWatcher->setFuture(QtConcurrent::run([filePath, thresholds, enableGpciFilter]() {
+        return loadCsvPlaybackFile(filePath, thresholds, enableGpciFilter);
     }));
     return true;
 }
@@ -61,10 +63,17 @@ void SerialPortAssistant::finishCSVPlaybackLoad()
     }
 
     m_playbackData = result.data;
+    m_displayingCsvPlayback = true;
     m_pulseAreaAnalyzer.reset();
     m_pulseSummaries = m_playbackData.pulses();
     m_recordedPulseSummaries.clear();
     applyPulseQualityThresholds();
+    if (Combo_Mode->currentIndex() != 3) {
+        Label_PulseAreaStatus->setText(
+            QString::fromUtf8("ECL 积分：仅 GPCI 模式可用"));
+        Label_FilterQualityStatus->setText(
+            QString::fromUtf8("滤波质量：仅 GPCI 模式可用"));
+    }
 
     m_frameParser.clear();
     m_lastStatusFrames = 0;
@@ -74,7 +83,7 @@ void SerialPortAssistant::finishCSVPlaybackLoad()
             .arg(m_playbackData.rows().size())
             .arg(m_playbackData.duration(), 0, 'f', 3)
             .arg(m_playbackData.hasFilteredData()
-                ? QString::fromUtf8("滤波可用")
+                ? QString::fromUtf8("GPCI 滤波可用")
                 : QString::fromUtf8("仅原始数据")));
     Btn_PlayPauseCSV->setEnabled(true);
     Slider_Playback->setEnabled(true);

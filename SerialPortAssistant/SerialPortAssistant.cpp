@@ -81,18 +81,46 @@ void SerialPortAssistant::setupConnections() {
     // 动态启停 CSV 记录
     connect(CheckBox_SaveCSV, &QCheckBox::toggled, this, &SerialPortAssistant::onSaveCSVToggled);
     for (QCheckBox* checkBox : CheckBox_ChannelVisible) {
-        connect(checkBox, &QCheckBox::toggled, this, &SerialPortAssistant::updateSeriesVisibility);
+        connect(checkBox, &QCheckBox::toggled, [this]() {
+            if (CheckBox_EnablePlot->isChecked() && !CheckBox_PausePlot->isChecked()) {
+                updatePlotSeries();
+            }
+            else {
+                updateSeriesVisibility();
+            }
+        });
     }
     connect(CheckBox_PausePlot, &QCheckBox::toggled, [this](bool paused) {
         if (!paused && CheckBox_EnablePlot->isChecked()) updatePlotSeries();
     });
+    connect(CheckBox_XFollow, &QCheckBox::toggled, [this](bool enabled) {
+        if (enabled && CheckBox_EnablePlot->isChecked()
+            && !CheckBox_PausePlot->isChecked()) {
+            updatePlotSeries();
+        }
+    });
     connect(CheckBox_AutoScale, &QCheckBox::toggled, [this](bool enabled) {
-        if (enabled) fitChartToData();
+        if (enabled && CheckBox_EnablePlot->isChecked()
+            && !CheckBox_PausePlot->isChecked()) {
+            updatePlotSeries();
+        }
     });
     connect(CheckBox_EnablePlot, &QCheckBox::toggled, [this](bool enabled) {
         if (enabled && !CheckBox_PausePlot->isChecked()) updatePlotSeries();
     });
     connect(Combo_FilterDisplay, QOverload<int>::of(&QComboBox::currentIndexChanged), [this]() {
+        if (Combo_Mode->currentIndex() == 3) {
+            m_gpciFilterDisplayIndex = Combo_FilterDisplay->currentIndex();
+        }
+        if (CheckBox_EnablePlot->isChecked() && !CheckBox_PausePlot->isChecked()) {
+            updatePlotSeries();
+        }
+        updateStatusPanel();
+    });
+    connect(CheckBox_EnableFilter, &QCheckBox::toggled, [this](bool enabled) {
+        const bool gpciMode = Combo_Mode->currentIndex() == 3;
+        Combo_FilterDisplay->setEnabled(gpciMode && enabled);
+        setPulseQualityControlsEnabled(gpciMode && enabled && !serialPort->isOpen());
         if (CheckBox_EnablePlot->isChecked() && !CheckBox_PausePlot->isChecked()) {
             updatePlotSeries();
         }
@@ -292,6 +320,7 @@ void SerialPortAssistant::handleRealtimeFilteredSamples(
                 sample.filtered.filterValid,
                 sample.filtered.gpciEvent);
         }
+        if (m_realtimeFilter.isEnabled() == false) continue;
         PulseAreaMeasurement completedPulse;
         if (m_pulseAreaAnalyzer.process(
                 sample.raw,
@@ -319,16 +348,36 @@ void SerialPortAssistant::flushRealtimeFilter()
 
 PlotDataBuffer& SerialPortAssistant::displayPlotBuffer()
 {
-    return Combo_FilterDisplay && Combo_FilterDisplay->currentData().toBool()
+    return isFilteredPlotSelected()
         ? m_filteredPlotBuffer
         : m_rawPlotBuffer;
 }
 
 const PlotDataBuffer& SerialPortAssistant::displayPlotBuffer() const
 {
-    return Combo_FilterDisplay && Combo_FilterDisplay->currentData().toBool()
+    return isFilteredPlotSelected()
         ? m_filteredPlotBuffer
         : m_rawPlotBuffer;
+}
+
+bool SerialPortAssistant::isFilteredPlotSelected() const
+{
+    return Combo_Mode->currentIndex() == 3
+        && CheckBox_EnableFilter->isChecked()
+        && Combo_FilterDisplay
+        && Combo_FilterDisplay->currentData().toBool();
+}
+
+PlotDataRange SerialPortAssistant::visiblePlotRange(bool includeFullCsv) const
+{
+    std::array<bool, PlotDataBuffer::ChannelCount> visibleChannels;
+    for (int channel = 0; channel < PlotDataBuffer::ChannelCount; ++channel) {
+        visibleChannels[channel] = CheckBox_ChannelVisible[channel]->isChecked();
+    }
+    if (includeFullCsv && m_displayingCsvPlayback && !m_playbackData.isEmpty()) {
+        return m_playbackData.range(visibleChannels, isFilteredPlotSelected());
+    }
+    return displayPlotBuffer().range(visibleChannels);
 }
 
 void SerialPortAssistant::togglePort(bool open) {
@@ -345,6 +394,7 @@ void SerialPortAssistant::togglePort(bool open) {
         serialPort->setBaudRate(SerialPort_BaudRate->currentText().toInt());
         serialPort->setReadBufferSize(4 * 1024 * 1024);
         if (serialPort->open(QIODevice::ReadWrite)) {
+            m_displayingCsvPlayback = false;
             serialPort->clear();
             m_frameParser.clear();
             for (QLineSeries* series : seriesList) series->clear();
@@ -395,7 +445,8 @@ void SerialPortAssistant::togglePort(bool open) {
         SerialPort_BaudRate->setEnabled(true);
         CheckBox_EnableFilter->setEnabled(Combo_Mode->currentIndex() == 3);
         stopCSVLogging();
-        setPulseQualityControlsEnabled(true);
+        setPulseQualityControlsEnabled(
+            Combo_Mode->currentIndex() == 3 && CheckBox_EnableFilter->isChecked());
         SerialPort_Connect->setEnabled(true);
         SerialPort_Disonnect->setEnabled(false);
         SerialPort_Send->setEnabled(false);
@@ -610,6 +661,7 @@ void SerialPortAssistant::loadSettings() {
     Edit_YRightMin->setText(settings.value("plot/yRightMin", "-2").toString());
     Edit_YRightMax->setText(settings.value("plot/yRightMax", "2").toString());
     CheckBox_AutoScale->setChecked(settings.value("plot/autoScale", false).toBool());
+    CheckBox_XFollow->setChecked(settings.value("plot/xFollow", true).toBool());
     CheckBox_Crosshair->setChecked(settings.value("plot/crosshair", true).toBool());
     CheckBox_EnableFilter->setChecked(settings.value("filter/enabled", true).toBool());
     Spin_MaxAreaDifference->setValue(
@@ -619,8 +671,11 @@ void SerialPortAssistant::loadSettings() {
     Spin_MinSnrImprovement->setValue(
         settings.value("filter/quality/minSnrImprovementDb", 0.0).toDouble());
     m_pulseAreaAnalyzer.setQualityThresholds(currentPulseQualityThresholds());
-    Combo_FilterDisplay->setCurrentIndex(
-        qBound(0, settings.value("filter/displayIndex", 0).toInt(), Combo_FilterDisplay->count() - 1));
+    m_gpciFilterDisplayIndex = qBound(
+        0,
+        settings.value("filter/displayIndex", 0).toInt(),
+        Combo_FilterDisplay->count() - 1);
+    Combo_FilterDisplay->setCurrentIndex(m_gpciFilterDisplayIndex);
     chartView->setCursorEnabled(CheckBox_Crosshair->isChecked());
     for (int channel = 0; channel < 3; ++channel) {
         CheckBox_ChannelVisible[channel]->setChecked(
@@ -685,6 +740,7 @@ void SerialPortAssistant::saveSettings() {
     settings.setValue("plot/yRightMin", Edit_YRightMin->text());
     settings.setValue("plot/yRightMax", Edit_YRightMax->text());
     settings.setValue("plot/autoScale", CheckBox_AutoScale->isChecked());
+    settings.setValue("plot/xFollow", CheckBox_XFollow->isChecked());
     settings.setValue("plot/crosshair", CheckBox_Crosshair->isChecked());
     settings.setValue("filter/enabled", CheckBox_EnableFilter->isChecked());
     settings.setValue(
@@ -696,7 +752,7 @@ void SerialPortAssistant::saveSettings() {
     settings.setValue(
         "filter/quality/minSnrImprovementDb",
         Spin_MinSnrImprovement->value());
-    settings.setValue("filter/displayIndex", Combo_FilterDisplay->currentIndex());
+    settings.setValue("filter/displayIndex", m_gpciFilterDisplayIndex);
     for (int channel = 0; channel < 3; ++channel) {
         settings.setValue(
             QString("plot/channel%1Visible").arg(channel),

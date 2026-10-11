@@ -3,7 +3,9 @@
 
 #include <QString>
 #include <QVector>
+#include <array>
 
+#include "PlotDataBuffer.h"
 #include "PulseAreaAnalyzer.h"
 
 struct CsvPlaybackRow
@@ -29,7 +31,8 @@ public:
     bool load(
         const QString& filePath,
         QString* errorMessage = nullptr,
-        const PulseQualityThresholds& qualityThresholds = {});
+        const PulseQualityThresholds& qualityThresholds = {},
+        bool enableGpciFilter = false);
     void clear();
 
     const QVector<CsvPlaybackRow>& rows() const { return m_rows; }
@@ -40,6 +43,9 @@ public:
     double firstTime() const;
     double lastTime() const;
     double duration() const;
+    PlotDataRange range(
+        const std::array<bool, PlotDataBuffer::ChannelCount>& visibleChannels,
+        bool useFilteredData) const;
 
 private:
     QVector<CsvPlaybackRow> m_rows;
@@ -59,5 +65,9 @@ CsvPlaybackLoadResult loadCsvPlaybackFile(const QString& filePath);
 CsvPlaybackLoadResult loadCsvPlaybackFile(
     const QString& filePath,
     const PulseQualityThresholds& qualityThresholds);
+CsvPlaybackLoadResult loadCsvPlaybackFile(
+    const QString& filePath,
+    const PulseQualityThresholds& qualityThresholds,
+    bool enableGpciFilter);
 
 #endif // CSVPLAYBACKDATA_H

@@ -68,7 +68,18 @@ void SerialPortAssistant::updatePlotSeries()
     }
 
     updateSeriesVisibility();
-    if (CheckBox_AutoScale->isChecked()) fitChartToData();
+    const PlotDataRange range = visiblePlotRange(false);
+    if (CheckBox_XFollow->isChecked() && range.hasX) {
+        setPaddedRange(axisX, range.xMinimum, range.xMaximum);
+    }
+    if (CheckBox_AutoScale->isChecked()) {
+        if (range.hasLeftAxis) {
+            setPaddedRange(axisY, range.leftMinimum, range.leftMaximum);
+        }
+        if (range.hasRightAxis) {
+            setPaddedRange(axisYRight, range.rightMinimum, range.rightMaximum);
+        }
+    }
     chartView->chart()->update();
     m_lastPlotRenderMilliseconds = renderTimer.nsecsElapsed() / 1000000.0;
 }
@@ -84,6 +95,7 @@ void SerialPortAssistant::trimPlotBuffers()
 
 void SerialPortAssistant::applyManualAxisRanges()
 {
+    CheckBox_XFollow->setChecked(false);
     CheckBox_AutoScale->setChecked(false);
 
     const double xMinimum = Edit_XMin->text().toDouble();
@@ -98,20 +110,49 @@ void SerialPortAssistant::applyManualAxisRanges()
     if (rightMinimum < rightMaximum) axisYRight->setRange(rightMinimum, rightMaximum);
 }
 
+void SerialPortAssistant::applyManualXAxisRange()
+{
+    CheckBox_XFollow->setChecked(false);
+    const double minimum = Edit_XMin->text().toDouble();
+    const double maximum = Edit_XMax->text().toDouble();
+    if (minimum < maximum) axisX->setRange(minimum, maximum);
+}
+
+void SerialPortAssistant::applyManualYAxisRange()
+{
+    CheckBox_AutoScale->setChecked(false);
+    const double minimum = Edit_YMin->text().toDouble();
+    const double maximum = Edit_YMax->text().toDouble();
+    if (minimum < maximum) axisY->setRange(minimum, maximum);
+}
+
+void SerialPortAssistant::applyManualYRightAxisRange()
+{
+    CheckBox_AutoScale->setChecked(false);
+    const double minimum = Edit_YRightMin->text().toDouble();
+    const double maximum = Edit_YRightMax->text().toDouble();
+    if (minimum < maximum) axisYRight->setRange(minimum, maximum);
+}
+
 void SerialPortAssistant::fitChartToData()
 {
-    std::array<bool, PlotDataBuffer::ChannelCount> visibleChannels;
-    for (int channel = 0; channel < PlotDataBuffer::ChannelCount; ++channel) {
-        visibleChannels[channel] = CheckBox_ChannelVisible[channel]->isChecked();
+    CheckBox_XFollow->setChecked(false);
+    CheckBox_AutoScale->setChecked(false);
+    const PlotDataRange range = visiblePlotRange(true);
+    if (range.hasX) {
+        setPaddedRange(axisX, range.xMinimum, range.xMaximum);
+        Edit_XMin->setText(QString::number(axisX->min(), 'g', 10));
+        Edit_XMax->setText(QString::number(axisX->max(), 'g', 10));
     }
-
-    const PlotDataRange range = displayPlotBuffer().range(visibleChannels);
-    if (range.hasX) setPaddedRange(axisX, range.xMinimum, range.xMaximum);
     if (range.hasLeftAxis) {
         setPaddedRange(axisY, range.leftMinimum, range.leftMaximum);
+        Edit_YMin->setText(QString::number(axisY->min(), 'g', 10));
+        Edit_YMax->setText(QString::number(axisY->max(), 'g', 10));
     }
     if (range.hasRightAxis) {
         setPaddedRange(axisYRight, range.rightMinimum, range.rightMaximum);
+        Edit_YRightMin->setText(QString::number(axisYRight->min(), 'g', 10));
+        Edit_YRightMax->setText(QString::number(axisYRight->max(), 'g', 10));
     }
 }
 
@@ -208,8 +249,31 @@ void SerialPortAssistant::clearMeasurement()
 void SerialPortAssistant::resetChartZoom()
 {
     chartView->chart()->zoomReset();
-    if (CheckBox_AutoScale->isChecked()) fitChartToData();
-    else applyManualAxisRanges();
+    const PlotDataRange range = visiblePlotRange(false);
+    if (CheckBox_XFollow->isChecked() && range.hasX) {
+        setPaddedRange(axisX, range.xMinimum, range.xMaximum);
+    }
+    else {
+        const double minimum = Edit_XMin->text().toDouble();
+        const double maximum = Edit_XMax->text().toDouble();
+        if (minimum < maximum) axisX->setRange(minimum, maximum);
+    }
+    if (CheckBox_AutoScale->isChecked()) {
+        if (range.hasLeftAxis) {
+            setPaddedRange(axisY, range.leftMinimum, range.leftMaximum);
+        }
+        if (range.hasRightAxis) {
+            setPaddedRange(axisYRight, range.rightMinimum, range.rightMaximum);
+        }
+    }
+    else {
+        const double yMinimum = Edit_YMin->text().toDouble();
+        const double yMaximum = Edit_YMax->text().toDouble();
+        const double rightMinimum = Edit_YRightMin->text().toDouble();
+        const double rightMaximum = Edit_YRightMax->text().toDouble();
+        if (yMinimum < yMaximum) axisY->setRange(yMinimum, yMaximum);
+        if (rightMinimum < rightMaximum) axisYRight->setRange(rightMinimum, rightMaximum);
+    }
 }
 
 void SerialPortAssistant::exportChartImage()

@@ -118,7 +118,9 @@ void SerialPortAssistant::initUI()
     CheckBox_ChannelVisible[2] = new QCheckBox(QStringLiteral("ECL"));
     for (QCheckBox* checkBox : CheckBox_ChannelVisible) checkBox->setChecked(true);
     CheckBox_PausePlot = new QCheckBox(QString::fromUtf8("暂停显示"));
-    CheckBox_AutoScale = new QCheckBox(QString::fromUtf8("自动缩放"));
+    CheckBox_XFollow = new QCheckBox(QString::fromUtf8("X 轴跟随"));
+    CheckBox_XFollow->setChecked(true);
+    CheckBox_AutoScale = new QCheckBox(QString::fromUtf8("Y 轴自动"));
     CheckBox_Crosshair = new QCheckBox(QString::fromUtf8("十字光标"));
     CheckBox_Crosshair->setChecked(true);
     CheckBox_Measurement = new QCheckBox(QString::fromUtf8("两点测量"));
@@ -139,8 +141,10 @@ void SerialPortAssistant::initUI()
     Btn_ExportChart->setMinimumWidth(82);
     CheckBox_PausePlot->setToolTip(QString::fromUtf8(
         "仅暂停曲线刷新，不停止串口接收、数据处理和 CSV 保存。"));
+    CheckBox_XFollow->setToolTip(QString::fromUtf8(
+        "持续让 X 轴跟随当前实时数据或 CSV 回放位置。"));
     CheckBox_AutoScale->setToolTip(QString::fromUtf8(
-        "根据当前可见曲线持续自动调整坐标轴范围。"));
+        "根据当前可见曲线持续自动调整 Y1 和 Y2 范围，不影响 X 轴。"));
     CheckBox_EnableFilter->setToolTip(QString::fromUtf8(
         "仅 GPCI 模式可用；原始数据仍会保留在 CSV 中。"));
     Combo_FilterDisplay->setToolTip(QString::fromUtf8(
@@ -148,7 +152,7 @@ void SerialPortAssistant::initUI()
     Btn_ResetPlot->setToolTip(QString::fromUtf8(
         "清空上位机曲线缓存，不重置设备端实验状态。"));
     Btn_FitChart->setToolTip(QString::fromUtf8(
-        "根据当前缓存中的可见数据调整坐标轴范围。"));
+        "一次性适应可见数据；CSV 回放使用整份文件，实时采集使用当前缓存。"));
     Btn_ResetZoom->setToolTip(QString::fromUtf8(
         "取消鼠标缩放，恢复自动范围或图表设置中的手动范围。"));
     Btn_ExportChart->setToolTip(QString::fromUtf8(
@@ -165,8 +169,9 @@ void SerialPortAssistant::initUI()
     chartControlGrid->addWidget(CheckBox_ChannelVisible[1], 0, 3);
     chartControlGrid->addWidget(CheckBox_ChannelVisible[2], 0, 4);
     chartControlGrid->addWidget(CheckBox_PausePlot, 0, 5);
-    chartControlGrid->addWidget(CheckBox_AutoScale, 0, 6);
-    chartControlGrid->setColumnStretch(7, 1);
+    chartControlGrid->addWidget(CheckBox_XFollow, 0, 6);
+    chartControlGrid->addWidget(CheckBox_AutoScale, 0, 7);
+    chartControlGrid->setColumnStretch(8, 1);
 
     chartControlGrid->addWidget(toolbarLabel(QString::fromUtf8("测量")), 1, 0);
     chartControlGrid->addWidget(CheckBox_Crosshair, 1, 1);
@@ -590,11 +595,11 @@ void SerialPortAssistant::initUI()
     connect(browseCsvButton, &QPushButton::clicked,
         this, &SerialPortAssistant::browseCSVDirectory);
     connect(applyXAxisButton, &QPushButton::clicked,
-        this, &SerialPortAssistant::applyManualAxisRanges);
+        this, &SerialPortAssistant::applyManualXAxisRange);
     connect(applyYAxisButton, &QPushButton::clicked,
-        this, &SerialPortAssistant::applyManualAxisRanges);
+        this, &SerialPortAssistant::applyManualYAxisRange);
     connect(applyYRightButton, &QPushButton::clicked,
-        this, &SerialPortAssistant::applyManualAxisRanges);
+        this, &SerialPortAssistant::applyManualYRightAxisRange);
     connect(loadCsvAction, &QAction::triggered, Btn_LoadCSV, &QPushButton::click);
     connect(chooseDirectoryAction, &QAction::triggered, browseCsvButton, &QPushButton::click);
     connect(exportChartAction, &QAction::triggered, Btn_ExportChart, &QPushButton::click);
@@ -631,6 +636,9 @@ void SerialPortAssistant::initUI()
 void SerialPortAssistant::updateChemLabels(int index)
 {
     if (index < 0 || index >= static_cast<int>(m_modeValues.size())) return;
+    if (m_currentMode == 3 && index != 3 && Combo_FilterDisplay) {
+        m_gpciFilterDisplayIndex = Combo_FilterDisplay->currentIndex();
+    }
 
     if (m_currentMode >= 0 && m_currentMode != index) {
         for (int parameter = 0; parameter < 6; ++parameter) {
@@ -689,7 +697,30 @@ void SerialPortAssistant::updateChemLabels(int index)
         Spin_Floats[parameter]->setValue(m_modeValues[index][parameter]);
     }
     m_currentMode = index;
+    const bool gpciMode = index == 3;
     if (CheckBox_EnableFilter) {
-        CheckBox_EnableFilter->setEnabled(index == 3 && !serialPort->isOpen());
+        CheckBox_EnableFilter->setEnabled(gpciMode && !serialPort->isOpen());
+    }
+    if (Combo_FilterDisplay) {
+        Combo_FilterDisplay->setEnabled(
+            gpciMode && CheckBox_EnableFilter->isChecked());
+        if (gpciMode) {
+            Combo_FilterDisplay->setCurrentIndex(m_gpciFilterDisplayIndex);
+        }
+        else {
+            Combo_FilterDisplay->setCurrentIndex(
+                qMax(0, Combo_FilterDisplay->findData(false)));
+        }
+    }
+    setPulseQualityControlsEnabled(
+        gpciMode && CheckBox_EnableFilter->isChecked() && !serialPort->isOpen());
+    if (gpciMode) {
+        updatePulseAreaStatus();
+    }
+    else {
+        Label_PulseAreaStatus->setText(
+            QString::fromUtf8("ECL 积分：仅 GPCI 模式可用"));
+        Label_FilterQualityStatus->setText(
+            QString::fromUtf8("滤波质量：仅 GPCI 模式可用"));
     }
 }

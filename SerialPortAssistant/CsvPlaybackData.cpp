@@ -19,12 +19,26 @@ bool parseOptionalNumber(const QString& text, double* value)
     *value = parsedValue;
     return true;
 }
+
+void includeRangeValue(double value, double* minimum, double* maximum, bool* hasValue)
+{
+    if (!std::isfinite(value)) return;
+    if (!*hasValue) {
+        *minimum = value;
+        *maximum = value;
+        *hasValue = true;
+        return;
+    }
+    *minimum = std::min(*minimum, value);
+    *maximum = std::max(*maximum, value);
+}
 }
 
 bool CsvPlaybackData::load(
     const QString& filePath,
     QString* errorMessage,
-    const PulseQualityThresholds& qualityThresholds)
+    const PulseQualityThresholds& qualityThresholds,
+    bool enableGpciFilter)
 {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -99,7 +113,7 @@ bool CsvPlaybackData::load(
         row.hasVoltage = parseOptionalNumber(columns.at(voltageColumn), &row.voltage);
         row.hasCurrent = parseOptionalNumber(columns.at(currentColumn), &row.current);
         row.hasOptical = parseOptionalNumber(columns.at(opticalColumn), &row.optical);
-        if (hasFilteredColumns) {
+        if (enableGpciFilter && hasFilteredColumns) {
             row.hasFiltered = parseOptionalNumber(
                 columns.at(filteredVoltageColumn), &row.filteredVoltage)
                 && parseOptionalNumber(columns.at(filteredCurrentColumn), &row.filteredCurrent)
@@ -129,7 +143,8 @@ bool CsvPlaybackData::load(
     bool filteredDataAvailable = std::any_of(
         loadedRows.cbegin(), loadedRows.cend(),
         [](const CsvPlaybackRow& row) { return row.hasFiltered; });
-    if (!filteredDataAvailable
+    if (enableGpciFilter
+        && !filteredDataAvailable
         && loadedRows.size() >= 2
         && loadedRows.size() <= kMaximumAutoFilterRows) {
         const double duration = loadedRows.last().timeSeconds - loadedRows.first().timeSeconds;
@@ -221,6 +236,41 @@ double CsvPlaybackData::duration() const
     return m_rows.isEmpty() ? 0.0 : lastTime() - firstTime();
 }
 
+PlotDataRange CsvPlaybackData::range(
+    const std::array<bool, PlotDataBuffer::ChannelCount>& visibleChannels,
+    bool useFilteredData) const
+{
+    PlotDataRange result;
+    for (const CsvPlaybackRow& row : m_rows) {
+        const bool useFilteredRow = useFilteredData && row.hasFiltered;
+        if (visibleChannels[0] && row.hasVoltage) {
+            includeRangeValue(row.timeSeconds, &result.xMinimum, &result.xMaximum, &result.hasX);
+            includeRangeValue(
+                useFilteredRow ? row.filteredVoltage : row.voltage,
+                &result.leftMinimum,
+                &result.leftMaximum,
+                &result.hasLeftAxis);
+        }
+        if (visibleChannels[1] && row.hasCurrent) {
+            includeRangeValue(row.timeSeconds, &result.xMinimum, &result.xMaximum, &result.hasX);
+            includeRangeValue(
+                useFilteredRow ? row.filteredCurrent : row.current,
+                &result.leftMinimum,
+                &result.leftMaximum,
+                &result.hasLeftAxis);
+        }
+        if (visibleChannels[2] && row.hasOptical) {
+            includeRangeValue(row.timeSeconds, &result.xMinimum, &result.xMaximum, &result.hasX);
+            includeRangeValue(
+                useFilteredRow ? row.filteredOptical : row.optical,
+                &result.rightMinimum,
+                &result.rightMaximum,
+                &result.hasRightAxis);
+        }
+    }
+    return result;
+}
+
 CsvPlaybackLoadResult loadCsvPlaybackFile(const QString& filePath)
 {
     return loadCsvPlaybackFile(filePath, PulseQualityThresholds{});
@@ -230,10 +280,19 @@ CsvPlaybackLoadResult loadCsvPlaybackFile(
     const QString& filePath,
     const PulseQualityThresholds& qualityThresholds)
 {
+    return loadCsvPlaybackFile(filePath, qualityThresholds, false);
+}
+
+CsvPlaybackLoadResult loadCsvPlaybackFile(
+    const QString& filePath,
+    const PulseQualityThresholds& qualityThresholds,
+    bool enableGpciFilter)
+{
     CsvPlaybackLoadResult result;
     result.succeeded = result.data.load(
         filePath,
         &result.errorMessage,
-        qualityThresholds);
+        qualityThresholds,
+        enableGpciFilter);
     return result;
 }
