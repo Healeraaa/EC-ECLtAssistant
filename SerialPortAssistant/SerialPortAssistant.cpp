@@ -629,6 +629,21 @@ void SerialPortAssistant::loadSettings() {
     m_currentMode = -1;
     Combo_Mode->setCurrentIndex(mode);
     updateChemLabels(mode);
+
+    if (m_settingsTabs->count() > 0) {
+        m_settingsTabs->setCurrentIndex(qBound(
+            0,
+            settings.value("window/settingsTab", 0).toInt(),
+            m_settingsTabs->count() - 1));
+    }
+    const QByteArray geometry = settings.value("window/geometry").toByteArray();
+    if (!geometry.isEmpty()) {
+        restoreGeometry(geometry);
+    }
+    const QByteArray state = settings.value("window/state").toByteArray();
+    if (!state.isEmpty()) {
+        restoreState(state, 1);
+    }
 }
 
 void SerialPortAssistant::saveSettings() {
@@ -672,6 +687,9 @@ void SerialPortAssistant::saveSettings() {
     }
     settings.setValue("playback/speedIndex", Combo_PlaybackSpeed->currentIndex());
     settings.setValue("playback/recentFiles", m_recentCsvFiles);
+    settings.setValue("window/settingsTab", m_settingsTabs->currentIndex());
+    settings.setValue("window/geometry", saveGeometry());
+    settings.setValue("window/state", saveState(1));
 
     for (int mode = 0; mode < 4; ++mode) {
         for (int parameter = 0; parameter < 6; ++parameter) {

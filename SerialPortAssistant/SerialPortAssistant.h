@@ -23,6 +23,9 @@
 #include <QSlider>
 #include <QElapsedTimer>
 #include <QFutureWatcher>
+#include <QDockWidget>
+#include <QToolBar>
+#include <QTabWidget>
 #include <array>
 
 #include "ChartInteractionView.h"
@@ -162,6 +165,10 @@ private:
 
     QDoubleSpinBox* Spin_Floats[6];
     QLabel* Label_Floats[6];
+    QDockWidget* m_settingsDock;
+    QDockWidget* m_logDock;
+    QToolBar* m_experimentToolBar;
+    QTabWidget* m_settingsTabs;
 
     // 图表与逻辑
     ChartInteractionView* chartView;
