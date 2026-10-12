@@ -54,6 +54,18 @@ int main()
         return 1;
     }
 
+    denseBuffer.trim(100);
+    preservedPeak = false;
+    for (const QPointF& point : denseBuffer.points(0)) {
+        if (point.y() == 1000.0) preservedPeak = true;
+    }
+    if (denseBuffer.pointCount(0) > 100 || !preservedPeak
+        || denseBuffer.points(0).first().x() != 0.0
+        || denseBuffer.points(0).last().x() != 9.999) {
+        std::cerr << "FAILED: historical compaction lost the time span or peak\n";
+        return 1;
+    }
+
     const std::array<bool, 3> visible{{ true, true, false }};
     const PlotDataRange range = buffer.range(visible);
     if (!range.hasX || !range.hasLeftAxis || range.hasRightAxis

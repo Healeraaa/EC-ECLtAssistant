@@ -142,7 +142,7 @@ void SerialPortAssistant::initUI()
     CheckBox_PausePlot->setToolTip(QString::fromUtf8(
         "仅暂停曲线刷新，不停止串口接收、数据处理和 CSV 保存。"));
     CheckBox_XFollow->setToolTip(QString::fromUtf8(
-        "持续让 X 轴跟随当前实时数据或 CSV 回放位置。"));
+        "保持实验起点，随最新时间扩展 X 轴，并将整段历史波形横向压缩显示。"));
     CheckBox_AutoScale->setToolTip(QString::fromUtf8(
         "根据当前可见曲线持续自动调整 Y1 和 Y2 范围，不影响 X 轴。"));
     CheckBox_EnableFilter->setToolTip(QString::fromUtf8(

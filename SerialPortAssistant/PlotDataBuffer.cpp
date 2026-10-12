@@ -65,9 +65,21 @@ void PlotDataBuffer::clear()
 void PlotDataBuffer::trim(int maximumPointsPerChannel)
 {
     maximumPointsPerChannel = std::max(1, maximumPointsPerChannel);
-    for (QVector<QPointF>& channelPoints : m_points) {
-        const int excessPointCount = channelPoints.size() - maximumPointsPerChannel;
-        if (excessPointCount > 0) channelPoints.remove(0, excessPointCount);
+    for (int channel = 0; channel < ChannelCount; ++channel) {
+        QVector<QPointF>& channelPoints = m_points[channel];
+        if (channelPoints.size() <= maximumPointsPerChannel) continue;
+        if (maximumPointsPerChannel == 1) {
+            const QPointF latestPoint = channelPoints.last();
+            channelPoints = { latestPoint };
+            continue;
+        }
+
+        // Keep the complete acquisition time span while bounding memory use.
+        // Leaving 25% free avoids recompressing the entire history on every refresh.
+        const int compactedPointCount = maximumPointsPerChannel <= 4
+            ? 2
+            : std::max(4, maximumPointsPerChannel * 3 / 4);
+        channelPoints = decimatedPoints(channel, compactedPointCount);
     }
 }
 
